@@ -29,8 +29,7 @@ export default function Signup() {
     setLoading(true);
     try {
       const data = await api.signup(form);
-      login(data.user, data.token);
-      navigate('/dashboard');
+navigate('/login');
     } catch (err) {
       setError(err.message);
     } finally {

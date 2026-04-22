@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = 'https://gradetransparency-system.onrender.com/api';
 
 const getToken = () => localStorage.getItem('grade_token');
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../database');
+const { get2, run2 } = require('../database');
 const { JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
@@ -24,13 +24,13 @@ router.post('/signup', async (req, res) => {
     return res.status(400).json({ error: 'Passwords do not match' });
 
   try {
-    const existingUser = await db.get2('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
+    const existingUser = await get2('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
     if (existingUser)
       return res.status(409).json({ error: 'Email already registered' });
 
     const password_hash = await bcrypt.hash(password, 12);
-    const result = await db.run2(
-      'INSERT INTO users (email, password_hash) VALUES (?, ?)',
+    const result = await run2(
+      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id',
       [email.toLowerCase(), password_hash]
     );
 
@@ -59,7 +59,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
 
   try {
-    const user = await db.get2('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+    const user = await get2('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
     if (!user)
       return res.status(401).json({ error: 'Invalid email or password' });
 
@@ -87,7 +87,7 @@ router.post('/login', async (req, res) => {
 // Get current user
 router.get('/me', require('../middleware/auth').authenticateToken, async (req, res) => {
   try {
-    const user = await db.get2('SELECT id, email, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = await get2('SELECT id, email, created_at FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) {

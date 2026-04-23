@@ -1,18 +1,18 @@
 const express = require('express');
-const db = require('../database');
+const { get2, all2, run2 } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(authenticateToken);
 
 const verifySubjectOwnership = (subjectId, userId) =>
-  db.get2('SELECT * FROM subjects WHERE id = ? AND user_id = ?', [subjectId, userId]);
+  get2('SELECT * FROM subjects WHERE id = $1 AND user_id = $2', [subjectId, userId]);
 
 const verifyCategoryOwnership = (categoryId, userId) =>
-  db.get2(`
+  get2(`
     SELECT c.* FROM categories c
     JOIN subjects s ON c.subject_id = s.id
-    WHERE c.id = ? AND s.user_id = ?
+    WHERE c.id = $1 AND s.user_id = $2
   `, [categoryId, userId]);
 
 // === CATEGORIES ===
@@ -30,22 +30,23 @@ router.post('/subjects/:subjectId/categories', async (req, res) => {
     if (isNaN(weight) || weight <= 0 || weight > 100)
       return res.status(400).json({ error: 'Weight must be between 0 and 100' });
 
-    const row = await db.get2(
-      'SELECT COALESCE(SUM(category_weight), 0) as total FROM categories WHERE subject_id = ?',
+    const row = await get2(
+      'SELECT COALESCE(SUM(category_weight), 0) as total FROM categories WHERE subject_id = $1',
       [req.params.subjectId]
     );
-    if (row.total + weight > 100.01)
+    if (parseFloat(row.total) + weight > 100.01)
       return res.status(400).json({
-        error: `Total weight would exceed 100%. Current: ${row.total.toFixed(1)}%, available: ${(100 - row.total).toFixed(1)}%`
+        error: `Total weight would exceed 100%. Current: ${parseFloat(row.total).toFixed(1)}%, available: ${(100 - parseFloat(row.total)).toFixed(1)}%`
       });
 
-    const result = await db.run2(
-      'INSERT INTO categories (subject_id, category_name, category_weight) VALUES (?, ?, ?)',
+    const result = await run2(
+      'INSERT INTO categories (subject_id, category_name, category_weight) VALUES ($1, $2, $3) RETURNING id',
       [req.params.subjectId, category_name.trim(), weight]
     );
-    const category = await db.get2('SELECT * FROM categories WHERE id = ?', [result.lastInsertRowid]);
+    const category = await get2('SELECT * FROM categories WHERE id = $1', [result.lastInsertRowid]);
     res.status(201).json(category);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -63,20 +64,20 @@ router.put('/categories/:id', async (req, res) => {
     if (isNaN(weight) || weight <= 0 || weight > 100)
       return res.status(400).json({ error: 'Weight must be between 0 and 100' });
 
-    const row = await db.get2(
-      'SELECT COALESCE(SUM(category_weight), 0) as total FROM categories WHERE subject_id = ? AND id != ?',
+    const row = await get2(
+      'SELECT COALESCE(SUM(category_weight), 0) as total FROM categories WHERE subject_id = $1 AND id != $2',
       [category.subject_id, req.params.id]
     );
-    if (row.total + weight > 100.01)
+    if (parseFloat(row.total) + weight > 100.01)
       return res.status(400).json({
-        error: `Total weight would exceed 100%. Other categories: ${row.total.toFixed(1)}%`
+        error: `Total weight would exceed 100%. Other categories: ${parseFloat(row.total).toFixed(1)}%`
       });
 
-    await db.run2(
-      'UPDATE categories SET category_name = ?, category_weight = ? WHERE id = ?',
+    await run2(
+      'UPDATE categories SET category_name = $1, category_weight = $2 WHERE id = $3',
       [category_name.trim(), weight, req.params.id]
     );
-    const updated = await db.get2('SELECT * FROM categories WHERE id = ?', [req.params.id]);
+    const updated = await get2('SELECT * FROM categories WHERE id = $1', [req.params.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -88,7 +89,7 @@ router.delete('/categories/:id', async (req, res) => {
     const category = await verifyCategoryOwnership(req.params.id, req.user.id);
     if (!category) return res.status(404).json({ error: 'Category not found' });
 
-    await db.run2('DELETE FROM categories WHERE id = ?', [req.params.id]);
+    await run2('DELETE FROM categories WHERE id = $1', [req.params.id]);
     res.json({ message: 'Category deleted' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -115,11 +116,11 @@ router.post('/categories/:categoryId/scores', async (req, res) => {
     if (total === 0)
       return res.status(400).json({ error: 'Total score must be greater than 0' });
 
-    const result = await db.run2(
-      'INSERT INTO scores (category_id, score_obtained, total_score, label) VALUES (?, ?, ?, ?)',
+    const result = await run2(
+      'INSERT INTO scores (category_id, score_obtained, total_score, label) VALUES ($1, $2, $3, $4) RETURNING id',
       [req.params.categoryId, obtained, total, label || '']
     );
-    const score = await db.get2('SELECT * FROM scores WHERE id = ?', [result.lastInsertRowid]);
+    const score = await get2('SELECT * FROM scores WHERE id = $1', [result.lastInsertRowid]);
     res.status(201).json(score);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -128,11 +129,11 @@ router.post('/categories/:categoryId/scores', async (req, res) => {
 
 router.put('/scores/:id', async (req, res) => {
   try {
-    const score = await db.get2(`
+    const score = await get2(`
       SELECT sc.* FROM scores sc
       JOIN categories c ON sc.category_id = c.id
       JOIN subjects s ON c.subject_id = s.id
-      WHERE sc.id = ? AND s.user_id = ?
+      WHERE sc.id = $1 AND s.user_id = $2
     `, [req.params.id, req.user.id]);
     if (!score) return res.status(404).json({ error: 'Score not found' });
 
@@ -149,11 +150,11 @@ router.put('/scores/:id', async (req, res) => {
     if (total === 0)
       return res.status(400).json({ error: 'Total score must be greater than 0' });
 
-    await db.run2(
-      'UPDATE scores SET score_obtained = ?, total_score = ?, label = ? WHERE id = ?',
+    await run2(
+      'UPDATE scores SET score_obtained = $1, total_score = $2, label = $3 WHERE id = $4',
       [obtained, total, label || '', req.params.id]
     );
-    const updated = await db.get2('SELECT * FROM scores WHERE id = ?', [req.params.id]);
+    const updated = await get2('SELECT * FROM scores WHERE id = $1', [req.params.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -162,15 +163,15 @@ router.put('/scores/:id', async (req, res) => {
 
 router.delete('/scores/:id', async (req, res) => {
   try {
-    const score = await db.get2(`
+    const score = await get2(`
       SELECT sc.* FROM scores sc
       JOIN categories c ON sc.category_id = c.id
       JOIN subjects s ON c.subject_id = s.id
-      WHERE sc.id = ? AND s.user_id = ?
+      WHERE sc.id = $1 AND s.user_id = $2
     `, [req.params.id, req.user.id]);
     if (!score) return res.status(404).json({ error: 'Score not found' });
 
-    await db.run2('DELETE FROM scores WHERE id = ?', [req.params.id]);
+    await run2('DELETE FROM scores WHERE id = $1', [req.params.id]);
     res.json({ message: 'Score deleted' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

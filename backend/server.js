@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://strong-bienenstitch-b63bfa.netlify.app'],
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://strong-bienenstitch-b63bfa.netlify.app', 'https://gradetracknirodz.netlify.app'],
   credentials: true
 }));
 app.use(express.json());

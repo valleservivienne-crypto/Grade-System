@@ -4,22 +4,73 @@ import { useAuth } from '../context/AuthContext';
 import { api, calculateGrade, getGradeStatus } from '../utils/api';
 import SubjectModal from '../components/SubjectModal';
 
+const TUTORIAL_STEPS = [
+  {
+    icon: '🎓',
+    title: 'Welcome to GradeTrack!',
+    description:
+      'GradeTrack helps you monitor your academic performance in real time. You can add subjects, set grading categories with weights, log your scores, and instantly see your standing — all in one place.',
+    tip: '💡 This tutorial will walk you through everything. You can revisit it anytime.',
+  },
+  {
+    icon: '📚',
+    title: 'Step 1 — Add Your Subjects',
+    description:
+      'Start by adding each subject you are enrolled in this semester. Click the "+ Add Subject" button at the top right of the dashboard. Fill in the subject name, your instructor\'s name, and the semester.',
+    tip: '💡 You can add as many subjects as you need. Each subject is tracked independently.',
+  },
+  {
+    icon: '⚖️',
+    title: 'Step 2 — Set Up Grading Categories',
+    description:
+      'Once inside a subject, add grading categories such as Quizzes, Assignments, Midterm Exam, and Final Exam. Each category has a weight (e.g., Quizzes = 30%, Finals = 40%). Make sure your total weights add up to 100%.',
+    tip: '💡 Categories with higher weights impact your grade more — set them accurately!',
+  },
+  {
+    icon: '📝',
+    title: 'Step 3 — Log Your Scores',
+    description:
+      'Inside each category, add individual scores. Enter the score you obtained and the total possible score (e.g., 18 out of 20). You can label each score (e.g., "Quiz 1", "Assignment 2") for easy reference.',
+    tip: '💡 The more scores you log, the more accurate your grade calculation becomes.',
+  },
+  {
+    icon: '📊',
+    title: 'Step 4 — Track Your Grade',
+    description:
+      'GradeTrack automatically calculates your weighted grade based on your scores. Your grade status is shown as On Track (≥85%), Needs Improvement (75–84%), or At Risk (<75%), with color indicators on each subject card.',
+    tip: '💡 Green means you\'re doing great! Yellow is a warning, and Red means you need to focus more.',
+  },
+  {
+    icon: '🎯',
+    title: 'Step 5 — Use the Target Grade Planner',
+    description:
+      'Inside any subject, you can set a target grade and GradeTrack will calculate the required average score on your remaining assessments to reach that goal. This helps you plan your study sessions effectively.',
+    tip: '💡 Use the planner before exams to know exactly what score you need to pass or excel.',
+  },
+  {
+    icon: '🚀',
+    title: "You're All Set!",
+    description:
+      'You now know everything you need to use GradeTrack effectively. Start by adding your first subject — your academic journey begins here. Good luck this semester! 🍀',
+    tip: '💡 You can reopen this tutorial anytime by clicking the "?" button on the dashboard.',
+  },
+];
+
 export default function Dashboard() {
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editSubject, setEditSubject] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const loadSubjects = useCallback(async () => {
     try {
       const data = await api.getSubjects();
-      // Load full data for each subject to calculate grades
-      const full = await Promise.all(
-        data.map(s => api.getSubject(s.id))
-      );
+      const full = await Promise.all(data.map(s => api.getSubject(s.id)));
       setSubjects(full);
     } catch (err) {
       console.error('Failed to load subjects:', err);
@@ -29,6 +80,15 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => { loadSubjects(); }, [loadSubjects]);
+
+  // Show tutorial automatically on first visit
+  useEffect(() => {
+    const seen = localStorage.getItem('gradetrack_tutorial_seen');
+    if (!seen) {
+      setShowTutorial(true);
+      localStorage.setItem('gradetrack_tutorial_seen', 'true');
+    }
+  }, []);
 
   const handleDelete = async (id) => {
     try {
@@ -43,7 +103,6 @@ export default function Dashboard() {
       const g = calculateGrade(s.categories);
       return g ? g.grade : null;
     }).filter(g => g !== null);
-
     return {
       total: subjects.length,
       avg: withGrades.length ? (withGrades.reduce((a, b) => a + b, 0) / withGrades.length) : null,
@@ -51,6 +110,13 @@ export default function Dashboard() {
       atRisk: withGrades.filter(g => g < 75).length,
     };
   })();
+
+  const openTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
+  const closeTutorial = () => setShowTutorial(false);
+  const nextStep = () => { if (tutorialStep < TUTORIAL_STEPS.length - 1) setTutorialStep(t => t + 1); else closeTutorial(); };
+  const prevStep = () => { if (tutorialStep > 0) setTutorialStep(t => t - 1); };
+
+  const step = TUTORIAL_STEPS[tutorialStep];
 
   return (
     <div style={styles.page}>
@@ -73,6 +139,14 @@ export default function Dashboard() {
         </nav>
 
         <div style={styles.sidebarBottom}>
+          {/* Tutorial button */}
+          <button onClick={openTutorial} style={styles.tutorialSideBtn}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(37,99,235,0.15)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <span style={styles.tutorialSideIcon}>?</span>
+            How to use GradeTrack
+          </button>
+
           <div style={styles.userCard}>
             <div style={styles.avatar}>{user?.email?.[0]?.toUpperCase()}</div>
             <div style={{flex:1, overflow:'hidden'}}>
@@ -97,13 +171,20 @@ export default function Dashboard() {
             <h1 style={styles.pageTitle}>My Subjects</h1>
             <p style={styles.pageSubtitle}>Track your academic performance across all subjects</p>
           </div>
-          <button onClick={() => { setEditSubject(null); setShowModal(true); }}
-            style={styles.addBtn}
-            onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
-            onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2.5" strokeLinecap="round"/></svg>
-            Add Subject
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button onClick={openTutorial} style={styles.helpBtn} title="Open Tutorial"
+              onMouseEnter={e => e.currentTarget.style.background = '#EFF4FF'}
+              onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+              <span style={{ fontSize: '16px', fontWeight: '700', color: '#2563EB' }}>?</span>
+            </button>
+            <button onClick={() => { setEditSubject(null); setShowModal(true); }}
+              style={styles.addBtn}
+              onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
+              onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2.5" strokeLinecap="round"/></svg>
+              Add Subject
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -124,16 +205,7 @@ export default function Dashboard() {
             {[1,2,3].map(i => <div key={i} style={{...styles.skeletonCard, animationDelay: `${i*0.1}s`}} className="skeleton" />)}
           </div>
         ) : subjects.length === 0 ? (
-          <div style={styles.empty} className="animate-scale">
-            <div style={styles.emptyIcon}>🎓</div>
-            <h2 style={styles.emptyTitle}>No subjects yet</h2>
-            <p style={styles.emptyText}>Add your first subject to start tracking your grades</p>
-            <button onClick={() => setShowModal(true)} style={styles.emptyBtn}
-              onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
-              onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
-              Add Your First Subject
-            </button>
-          </div>
+          <EmptyState onAdd={() => setShowModal(true)} onTutorial={openTutorial} />
         ) : (
           <div style={styles.grid}>
             {subjects.map((subject, i) => (
@@ -150,7 +222,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Subject Modal */}
       {showModal && (
         <SubjectModal
           subject={editSubject}
@@ -170,6 +242,7 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Delete Modal */}
       {deleteConfirm && (
         <DeleteModal
           name={deleteConfirm.subject_name}
@@ -177,6 +250,107 @@ export default function Dashboard() {
           onClose={() => setDeleteConfirm(null)}
         />
       )}
+
+      {/* Tutorial Modal */}
+      {showTutorial && (
+        <div style={styles.overlay} onClick={closeTutorial}>
+          <div style={styles.tutorialModal} onClick={e => e.stopPropagation()} className="animate-scale">
+            {/* Progress bar */}
+            <div style={styles.progressTrack}>
+              <div style={{ ...styles.progressFill, width: `${((tutorialStep + 1) / TUTORIAL_STEPS.length) * 100}%` }} />
+            </div>
+
+            {/* Step indicator */}
+            <div style={styles.stepIndicator}>
+              <span style={styles.stepBadge}>Step {tutorialStep + 1} of {TUTORIAL_STEPS.length}</span>
+              <button onClick={closeTutorial} style={styles.skipBtn}>Skip Tutorial ✕</button>
+            </div>
+
+            {/* Content */}
+            <div style={styles.tutorialContent}>
+              <div style={styles.tutorialIconWrap}>
+                <span style={styles.tutorialIcon}>{step.icon}</span>
+              </div>
+              <h2 style={styles.tutorialTitle}>{step.title}</h2>
+              <p style={styles.tutorialDesc}>{step.description}</p>
+              <div style={styles.tutorialTip}>{step.tip}</div>
+            </div>
+
+            {/* Dot indicators */}
+            <div style={styles.dots}>
+              {TUTORIAL_STEPS.map((_, i) => (
+                <button key={i} onClick={() => setTutorialStep(i)} style={{
+                  ...styles.dot,
+                  background: i === tutorialStep ? '#2563EB' : '#E2E8F0',
+                  width: i === tutorialStep ? '20px' : '8px',
+                }} />
+              ))}
+            </div>
+
+            {/* Navigation */}
+            <div style={styles.tutorialNav}>
+              <button onClick={prevStep} style={{ ...styles.tutorialNavBtn, opacity: tutorialStep === 0 ? 0.3 : 1 }} disabled={tutorialStep === 0}>
+                ← Previous
+              </button>
+              <button onClick={nextStep} style={styles.tutorialNextBtn}>
+                {tutorialStep === TUTORIAL_STEPS.length - 1 ? "Let's Go! 🚀" : 'Next →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ onAdd, onTutorial }) {
+  return (
+    <div style={styles.emptyWrap} className="animate-scale">
+      {/* Main empty card */}
+      <div style={styles.emptyCard}>
+        <div style={styles.emptyIconWrap}>
+          <span style={styles.emptyIconBig}>🎓</span>
+        </div>
+        <h2 style={styles.emptyTitle}>Welcome to GradeTrack!</h2>
+        <p style={styles.emptyText}>
+          Start tracking your academic performance by adding your first subject.
+          Monitor your grades, set targets, and stay on top of your studies.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onAdd} style={styles.emptyBtnPrimary}
+            onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
+            ➕ Add Your First Subject
+          </button>
+          <button onClick={onTutorial} style={styles.emptyBtnSecondary}
+            onMouseEnter={e => e.currentTarget.style.background = '#EFF4FF'}
+            onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+            📖 View Tutorial
+          </button>
+        </div>
+      </div>
+
+      {/* Tips grid */}
+      <div style={styles.tipsGrid}>
+        <TipCard icon="📚" title="Add Subjects" desc="Add each subject you're enrolled in this semester with instructor and semester info." />
+        <TipCard icon="⚖️" title="Set Categories" desc="Create grading categories like Quizzes, Assignments, Midterm, and Finals with their weights." />
+        <TipCard icon="📝" title="Log Your Scores" desc="Enter your scores for each activity. GradeTrack automatically computes your grade." />
+        <TipCard icon="🎯" title="Target Grade Planner" desc="Set a target grade and see exactly what score you need on remaining assessments to reach it." />
+        <TipCard icon="📊" title="Track Progress" desc="View your overall average, at-risk subjects, and subjects that are on track — all at a glance." />
+        <TipCard icon="🚨" title="Risk Indicators" desc="Green = On Track (≥85%), Yellow = Needs Improvement (75–84%), Red = At Risk (<75%)." />
+      </div>
+    </div>
+  );
+}
+
+function TipCard({ icon, title, desc }) {
+  return (
+    <div style={styles.tipCard}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(37,99,235,0.12)'; e.currentTarget.style.borderColor = '#BFDBFE'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(15,23,42,0.06)'; e.currentTarget.style.borderColor = '#E2E8F0'; }}>
+      <div style={styles.tipIcon}>{icon}</div>
+      <div style={styles.tipTitle}>{title}</div>
+      <div style={styles.tipDesc}>{desc}</div>
     </div>
   );
 }
@@ -217,17 +391,10 @@ function SubjectCard({ subject, delay, onClick, onEdit, onDelete }) {
           <ActionBtn onClick={onDelete} icon="🗑️" title="Delete" danger />
         </div>
       </div>
-
       <h3 style={styles.subjectName}>{subject.subject_name}</h3>
-      {subject.instructor_name && (
-        <p style={styles.subjectMeta}>👤 {subject.instructor_name}</p>
-      )}
-      {subject.semester && (
-        <p style={styles.subjectMeta}>📅 {subject.semester}</p>
-      )}
-
+      {subject.instructor_name && <p style={styles.subjectMeta}>👤 {subject.instructor_name}</p>}
+      {subject.semester && <p style={styles.subjectMeta}>📅 {subject.semester}</p>}
       <div style={styles.cardDivider} />
-
       {gradeData ? (
         <>
           <div style={styles.gradeRow}>
@@ -244,7 +411,6 @@ function SubjectCard({ subject, delay, onClick, onEdit, onDelete }) {
       ) : (
         <div style={styles.noGrade}>No scores yet — add categories &amp; scores</div>
       )}
-
       <div style={styles.cardFooter}>
         <span style={styles.footerChip}>{subject.categories?.length || 0} categories</span>
         <span style={styles.footerChip}>{totalWeight.toFixed(0)}% weighted</span>
@@ -257,8 +423,7 @@ function ActionBtn({ onClick, icon, title, danger }) {
   return (
     <button onClick={onClick} title={title} style={{
       background: 'transparent', border: 'none', cursor: 'pointer',
-      padding: '6px', borderRadius: '6px', fontSize: '14px',
-      transition: 'background 0.15s',
+      padding: '6px', borderRadius: '6px', fontSize: '14px', transition: 'background 0.15s',
     }}
       onMouseEnter={e => e.currentTarget.style.background = danger ? '#FEE2E2' : '#F1F5F9'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -284,23 +449,17 @@ function DeleteModal({ name, onConfirm, onClose }) {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.deleteModal} onClick={e => e.stopPropagation()} className="animate-scale">
         <div style={{ fontSize: '40px', textAlign: 'center', marginBottom: '16px' }}>🗑️</div>
-        <h3 style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center', marginBottom: '8px' }}>
-          Delete Subject
-        </h3>
+        <h3 style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center', marginBottom: '8px' }}>Delete Subject</h3>
         <p style={{ fontSize: '14px', color: '#64748B', textAlign: 'center', marginBottom: '24px' }}>
           Are you sure you want to delete <strong>"{name}"</strong>? This will permanently remove all categories and scores.
         </p>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button onClick={onClose} style={styles.cancelBtn}
             onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-            onMouseLeave={e => e.currentTarget.style.background = 'white'}>
-            Cancel
-          </button>
+            onMouseLeave={e => e.currentTarget.style.background = 'white'}>Cancel</button>
           <button onClick={onConfirm} style={styles.deleteBtn}
             onMouseEnter={e => e.currentTarget.style.background = '#DC2626'}
-            onMouseLeave={e => e.currentTarget.style.background = '#EF4444'}>
-            Delete
-          </button>
+            onMouseLeave={e => e.currentTarget.style.background = '#EF4444'}>Delete</button>
         </div>
       </div>
     </div>
@@ -325,13 +484,22 @@ const styles = {
   navItem: {
     display: 'flex', alignItems: 'center', gap: '10px',
     padding: '10px 12px', borderRadius: '8px', fontSize: '13px',
-    fontWeight: '500', color: '#94A3B8', cursor: 'pointer',
-    transition: 'all 0.15s',
+    fontWeight: '500', color: '#94A3B8', cursor: 'pointer', transition: 'all 0.15s',
   },
-  navItemActive: {
-    background: 'rgba(37,99,235,0.2)', color: '#93C5FD',
-  },
+  navItemActive: { background: 'rgba(37,99,235,0.2)', color: '#93C5FD' },
   sidebarBottom: { borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' },
+  tutorialSideBtn: {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    width: '100%', padding: '8px 12px', borderRadius: '8px',
+    border: 'none', background: 'transparent', cursor: 'pointer',
+    fontSize: '12px', color: '#60A5FA', fontFamily: 'Plus Jakarta Sans, sans-serif',
+    transition: 'background 0.15s', marginBottom: '8px', fontWeight: '500',
+  },
+  tutorialSideIcon: {
+    width: '18px', height: '18px', borderRadius: '50%',
+    background: '#2563EB', color: 'white', display: 'inline-flex',
+    alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0,
+  },
   userCard: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', marginBottom: '4px' },
   avatar: {
     width: '32px', height: '32px', borderRadius: '50%',
@@ -352,13 +520,17 @@ const styles = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' },
   pageTitle: { fontSize: '28px', fontWeight: '800', color: '#0F172A', letterSpacing: '-0.5px' },
   pageSubtitle: { fontSize: '14px', color: '#64748B', marginTop: '4px' },
+  helpBtn: {
+    width: '38px', height: '38px', borderRadius: '50%', border: '1.5px solid #DBEAFE',
+    background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', transition: 'background 0.2s', flexShrink: 0,
+  },
   addBtn: {
     display: 'flex', alignItems: 'center', gap: '8px',
     background: '#2563EB', color: 'white', border: 'none',
     borderRadius: '10px', padding: '10px 18px', fontSize: '13px',
     fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s',
-    boxShadow: '0 4px 12px rgba(37,99,235,0.3)',
-    fontFamily: 'Plus Jakarta Sans, sans-serif',
+    boxShadow: '0 4px 12px rgba(37,99,235,0.3)', fontFamily: 'Plus Jakarta Sans, sans-serif',
   },
   statsGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
@@ -368,18 +540,54 @@ const styles = {
     background: 'white', borderRadius: '12px', padding: '20px',
     boxShadow: '0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.04)',
   },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '20px',
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' },
+  skeletonCard: { height: '220px', borderRadius: '14px' },
+
+  // Empty state
+  emptyWrap: { display: 'flex', flexDirection: 'column', gap: '24px' },
+  emptyCard: {
+    background: 'white', borderRadius: '20px', padding: '52px 40px',
+    textAlign: 'center', boxShadow: '0 1px 3px rgba(15,23,42,0.08)',
+    border: '1px solid #E2E8F0',
   },
+  emptyIconWrap: {
+    width: '88px', height: '88px', borderRadius: '24px', margin: '0 auto 20px',
+    background: 'linear-gradient(135deg, #EFF4FF, #DBEAFE)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  emptyIconBig: { fontSize: '44px' },
+  emptyTitle: { fontSize: '24px', fontWeight: '800', color: '#0F172A', marginBottom: '10px', letterSpacing: '-0.5px' },
+  emptyText: { fontSize: '15px', color: '#64748B', marginBottom: '28px', maxWidth: '420px', margin: '0 auto 28px', lineHeight: '1.6' },
+  emptyBtnPrimary: {
+    background: '#2563EB', color: 'white', border: 'none', borderRadius: '10px',
+    padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+    transition: 'background 0.2s', boxShadow: '0 4px 12px rgba(37,99,235,0.3)',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+  },
+  emptyBtnSecondary: {
+    background: 'white', color: '#2563EB', border: '1.5px solid #BFDBFE', borderRadius: '10px',
+    padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+    transition: 'background 0.2s', fontFamily: 'Plus Jakarta Sans, sans-serif',
+  },
+  tipsGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '14px',
+  },
+  tipCard: {
+    background: 'white', borderRadius: '14px', padding: '20px',
+    border: '1px solid #E2E8F0', transition: 'all 0.2s',
+    boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+  },
+  tipIcon: { fontSize: '28px', marginBottom: '10px' },
+  tipTitle: { fontSize: '13px', fontWeight: '700', color: '#0F172A', marginBottom: '6px' },
+  tipDesc: { fontSize: '12px', color: '#64748B', lineHeight: '1.5' },
+
+  // Subject card
   subjectCard: {
     background: 'white', borderRadius: '14px', padding: '22px',
     cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
     boxShadow: '0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.04)',
     border: '1px solid rgba(226,232,240,0.6)',
   },
-  skeletonCard: { height: '220px', borderRadius: '14px' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
   subjectInitial: {
     width: '42px', height: '42px', borderRadius: '10px',
@@ -398,22 +606,10 @@ const styles = {
   noGrade: { fontSize: '12px', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' },
   cardFooter: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' },
   footerChip: { fontSize: '11px', background: '#F8FAFC', color: '#64748B', padding: '3px 8px', borderRadius: '20px', fontWeight: '500' },
-  empty: {
-    background: 'white', borderRadius: '16px', padding: '60px 40px',
-    textAlign: 'center', boxShadow: '0 1px 3px rgba(15,23,42,0.08)',
-    gridColumn: '1/-1',
-  },
-  emptyIcon: { fontSize: '56px', marginBottom: '16px' },
-  emptyTitle: { fontSize: '22px', fontWeight: '700', color: '#0F172A', marginBottom: '8px' },
-  emptyText: { fontSize: '14px', color: '#64748B', marginBottom: '24px' },
-  emptyBtn: {
-    background: '#2563EB', color: 'white', border: 'none', borderRadius: '10px',
-    padding: '12px 24px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
-    transition: 'background 0.2s', boxShadow: '0 4px 12px rgba(37,99,235,0.3)',
-    fontFamily: 'Plus Jakarta Sans, sans-serif',
-  },
+
+  // Overlay & modals
   overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     zIndex: 1000, backdropFilter: 'blur(4px)', padding: '24px',
   },
@@ -430,5 +626,63 @@ const styles = {
     flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
     background: '#EF4444', color: 'white', cursor: 'pointer', fontSize: '14px',
     fontWeight: '600', transition: 'background 0.15s', fontFamily: 'Plus Jakarta Sans, sans-serif',
+  },
+
+  // Tutorial modal
+  tutorialModal: {
+    background: 'white', borderRadius: '20px', padding: '0',
+    maxWidth: '520px', width: '100%', boxShadow: '0 24px 64px rgba(15,23,42,0.25)',
+    overflow: 'hidden',
+  },
+  progressTrack: { height: '4px', background: '#F1F5F9', width: '100%' },
+  progressFill: { height: '100%', background: 'linear-gradient(90deg, #2563EB, #6366F1)', transition: 'width 0.4s ease', borderRadius: '0 2px 2px 0' },
+  stepIndicator: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '16px 24px 0',
+  },
+  stepBadge: {
+    fontSize: '11px', fontWeight: '700', color: '#2563EB',
+    background: '#EFF4FF', padding: '4px 10px', borderRadius: '20px', letterSpacing: '0.3px',
+  },
+  skipBtn: {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    fontSize: '12px', color: '#94A3B8', fontFamily: 'Plus Jakarta Sans, sans-serif',
+    fontWeight: '500', padding: '4px 8px', borderRadius: '6px',
+    transition: 'color 0.15s',
+  },
+  tutorialContent: { padding: '24px 32px' },
+  tutorialIconWrap: {
+    width: '72px', height: '72px', borderRadius: '20px', margin: '0 auto 20px',
+    background: 'linear-gradient(135deg, #EFF4FF, #DBEAFE)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  tutorialIcon: { fontSize: '36px' },
+  tutorialTitle: { fontSize: '20px', fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: '12px', letterSpacing: '-0.4px' },
+  tutorialDesc: { fontSize: '14px', color: '#475569', textAlign: 'center', lineHeight: '1.7', marginBottom: '16px' },
+  tutorialTip: {
+    background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px',
+    padding: '12px 16px', fontSize: '13px', color: '#166534', lineHeight: '1.5',
+  },
+  dots: { display: 'flex', justifyContent: 'center', gap: '6px', padding: '0 32px 16px' },
+  dot: {
+    height: '8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+    transition: 'all 0.3s', padding: 0,
+  },
+  tutorialNav: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '16px 32px 28px', gap: '12px',
+    borderTop: '1px solid #F1F5F9',
+  },
+  tutorialNavBtn: {
+    background: 'white', border: '1.5px solid #E2E8F0', borderRadius: '10px',
+    padding: '10px 20px', fontSize: '13px', fontWeight: '600', color: '#374151',
+    cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'all 0.15s',
+  },
+  tutorialNextBtn: {
+    background: 'linear-gradient(135deg, #2563EB, #6366F1)', color: 'white',
+    border: 'none', borderRadius: '10px', padding: '10px 24px',
+    fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+    boxShadow: '0 4px 12px rgba(37,99,235,0.35)', flex: 1,
   },
 };

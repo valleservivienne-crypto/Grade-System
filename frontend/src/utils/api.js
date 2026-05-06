@@ -39,6 +39,12 @@ export const api = {
   createScore: (categoryId, body) => request('POST', `/categories/${categoryId}/scores`, body),
   updateScore: (id, body) => request('PUT', `/scores/${id}`, body),
   deleteScore: (id) => request('DELETE', `/scores/${id}`),
+
+  // Attendance
+  getAttendance: (subjectId) => request('GET', `/subjects/${subjectId}/attendance`),
+  updateAttendance: (subjectId, body) => request('PUT', `/subjects/${subjectId}/attendance`, body),
+  addAttendanceSession: (subjectId, body) => request('POST', `/subjects/${subjectId}/attendance/sessions`, body),
+  deleteAttendanceSession: (id) => request('DELETE', `/attendance/sessions/${id}`),
 };
 
 // Grade calculation utilities

@@ -46,6 +46,24 @@ const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        total_classes INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance_sessions (
+        id SERIAL PRIMARY KEY,
+        attendance_id INTEGER NOT NULL REFERENCES attendance(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('present', 'absent', 'late')),
+        label TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log('✅ Database tables ready');
   } finally {
     client.release();
@@ -54,19 +72,16 @@ const initDB = async () => {
 
 initDB().catch(console.error);
 
-// Helper: run a query that returns one row
 const get2 = async (sql, params = []) => {
   const result = await pool.query(sql, params);
   return result.rows[0] || null;
 };
 
-// Helper: run a query that returns multiple rows
 const all2 = async (sql, params = []) => {
   const result = await pool.query(sql, params);
   return result.rows;
 };
 
-// Helper: run INSERT/UPDATE/DELETE
 const run2 = async (sql, params = []) => {
   const result = await pool.query(sql, params);
   return {

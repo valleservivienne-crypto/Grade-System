@@ -16,6 +16,9 @@ export default function SubjectDetail() {
   const [editScore, setEditScore] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [attendance, setAttendance] = useState(null);
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [totalInput, setTotalInput] = useState('');
   const toastId = React.useRef(0);
 
   const showToast = useCallback((message, type = 'success') => {
@@ -35,7 +38,17 @@ export default function SubjectDetail() {
     }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadAttendance = useCallback(async () => {
+    try {
+      const data = await api.getAttendance(id);
+      setAttendance(data);
+      setTotalInput(String(data.total_classes));
+    } catch (err) {
+      console.error('Failed to load attendance:', err);
+    }
+  }, [id]);
+
+  useEffect(() => { load(); loadAttendance(); }, [load, loadAttendance]);
 
   const gradeData = subject ? calculateGrade(subject.categories) : null;
   const status = gradeData ? getGradeStatus(gradeData.grade) : null;
@@ -44,15 +57,58 @@ export default function SubjectDetail() {
   const plannerResult = (subject && targetGrade !== '') ?
     calculateWithExpected(subject.categories, parseFloat(targetGrade), expectedScores) : null;
 
+  // Attendance calculations
+  const attendanceStats = attendance ? (() => {
+    const sessions = attendance.sessions || [];
+    const present = sessions.filter(s => s.status === 'present').length;
+    const absent = sessions.filter(s => s.status === 'absent').length;
+    const late = sessions.filter(s => s.status === 'late').length;
+    const attended = present + late;
+    const total = attendance.total_classes || 0;
+    const percentage = total > 0 ? (attended / total) * 100 : 0;
+    return { present, absent, late, attended, total, percentage, sessions };
+  })() : null;
+
   const handlePrint = () => {
-    const printContent = generatePrintHTML(subject, gradeData, status);
+    const printContent = generatePrintHTML(subject, gradeData, status, attendance, attendanceStats);
     const printWindow = window.open('', '_blank');
     printWindow.document.write(printContent);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+    setTimeout(() => { printWindow.print(); }, 500);
+  };
+
+  const handleAddSession = async (sessionStatus) => {
+    try {
+      await api.addAttendanceSession(id, { status: sessionStatus });
+      await loadAttendance();
+      showToast(`Marked as ${sessionStatus}!`);
+    } catch (err) {
+      showToast('Failed to add session', 'error');
+    }
+  };
+
+  const handleDeleteSession = async (sessionId) => {
+    try {
+      await api.deleteAttendanceSession(sessionId);
+      await loadAttendance();
+      showToast('Session removed');
+    } catch (err) {
+      showToast('Failed to remove session', 'error');
+    }
+  };
+
+  const handleSaveTotal = async () => {
+    const total = parseInt(totalInput);
+    if (isNaN(total) || total < 0) { showToast('Please enter a valid number', 'error'); return; }
+    try {
+      await api.updateAttendance(id, { total_classes: total });
+      await loadAttendance();
+      setEditingTotal(false);
+      showToast('Total classes updated!');
+    } catch (err) {
+      showToast('Failed to update', 'error');
+    }
   };
 
   if (loading) return <LoadingState />;
@@ -62,6 +118,7 @@ export default function SubjectDetail() {
     <div style={styles.page}>
       <style>{`
         @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         @media print { body { margin: 0; } }
       `}</style>
 
@@ -108,7 +165,7 @@ export default function SubjectDetail() {
       </div>
 
       <div style={styles.content}>
-        {/* Hero Section */}
+        {/* Hero */}
         <div style={styles.hero} className="animate-in">
           <div style={styles.heroLeft}>
             <div style={styles.heroInitial}>{subject.subject_name[0]}</div>
@@ -127,7 +184,6 @@ export default function SubjectDetail() {
           )}
         </div>
 
-        {/* Trend & Alerts */}
         {trend && (
           <div style={{ ...styles.trendBanner, background: trend.type === 'improving' ? '#ECFDF5' : trend.type === 'declining' ? '#FEF2F2' : '#EFF4FF', borderColor: trend.type === 'improving' ? '#A7F3D0' : trend.type === 'declining' ? '#FECACA' : '#BFDBFE', color: trend.type === 'improving' ? '#065F46' : trend.type === 'declining' ? '#991B1B' : '#1E40AF' }} className="animate-in">
             {trend.msg}
@@ -141,8 +197,8 @@ export default function SubjectDetail() {
         )}
 
         <div style={styles.mainGrid}>
-          {/* Categories Column */}
           <div style={styles.leftCol}>
+            {/* Categories */}
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Grade Categories</h2>
               <button onClick={() => { setEditCat(null); setShowCatModal(true); }} style={styles.addSmallBtn}
@@ -169,6 +225,24 @@ export default function SubjectDetail() {
                 ))}
               </div>
             )}
+
+            {/* Attendance Tracker */}
+            <div style={{ marginTop: '28px' }}>
+              <div style={styles.sectionHeader}>
+                <h2 style={styles.sectionTitle}>📅 Attendance Tracker</h2>
+              </div>
+              <AttendanceTracker
+                attendance={attendance}
+                stats={attendanceStats}
+                editingTotal={editingTotal}
+                totalInput={totalInput}
+                setTotalInput={setTotalInput}
+                setEditingTotal={setEditingTotal}
+                onSaveTotal={handleSaveTotal}
+                onAddSession={handleAddSession}
+                onDeleteSession={handleDeleteSession}
+              />
+            </div>
           </div>
 
           {/* Right Column */}
@@ -229,15 +303,7 @@ export default function SubjectDetail() {
                       <div style={{ fontSize: '24px', marginBottom: '6px' }}>📊</div>
                       <div style={{ fontWeight: '700', color: '#1E40AF', fontSize: '15px' }}>Projected Grade</div>
                       <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563EB', margin: '4px 0' }}>{plannerResult.projectedGrade.toFixed(2)}%</div>
-                      <div style={{ fontSize: '13px', color: '#1D4ED8' }}>Still need <strong>{plannerResult.gap.toFixed(2)}%</strong> more to reach {targetGrade}%. Try adding expected scores above 👆</div>
-                      <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {plannerResult.breakdown.filter(b => b.avg !== null).map(b => (
-                          <div key={b.cat.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#475569' }}>
-                            <span>{b.cat.category_name} {b.hasExpected ? '✏️' : ''}</span>
-                            <span style={{ fontWeight: '600' }}>{b.avg.toFixed(1)}% × {b.cat.category_weight}% = <span style={{ color: '#2563EB' }}>{b.weighted.toFixed(2)}</span></span>
-                          </div>
-                        ))}
-                      </div>
+                      <div style={{ fontSize: '13px', color: '#1D4ED8' }}>Still need <strong>{plannerResult.gap.toFixed(2)}%</strong> more to reach {targetGrade}%.</div>
                     </>
                   )}
                 </div>
@@ -251,7 +317,7 @@ export default function SubjectDetail() {
                 <QuickStat label="Categories" value={subject.categories?.length || 0} />
                 <QuickStat label="Total Scores" value={subject.categories?.reduce((s, c) => s + (c.scores?.length || 0), 0) || 0} />
                 <QuickStat label="Weight Used" value={`${totalWeight.toFixed(0)}%`} />
-                <QuickStat label="Remaining" value={`${(100 - totalWeight).toFixed(0)}%`} />
+                <QuickStat label="Attendance" value={attendanceStats ? `${attendanceStats.percentage.toFixed(0)}%` : '—'} />
               </div>
             </div>
           </div>
@@ -299,7 +365,135 @@ export default function SubjectDetail() {
   );
 }
 
-function generatePrintHTML(subject, gradeData, status) {
+// ============ ATTENDANCE TRACKER COMPONENT ============
+function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTotalInput, setEditingTotal, onSaveTotal, onAddSession, onDeleteSession }) {
+  const [showSessions, setShowSessions] = useState(false);
+
+  if (!attendance) return (
+    <div style={{ textAlign: 'center', padding: '30px', background: '#F8FAFC', borderRadius: '12px', border: '2px dashed #E2E8F0' }}>
+      <div style={{ fontSize: '28px', marginBottom: '8px' }}>📅</div>
+      <div style={{ fontSize: '13px', color: '#94A3B8' }}>Loading attendance...</div>
+    </div>
+  );
+
+  const pctColor = stats?.percentage >= 75 ? '#10B981' : stats?.percentage >= 50 ? '#F59E0B' : '#EF4444';
+  const pctBg = stats?.percentage >= 75 ? '#ECFDF5' : stats?.percentage >= 50 ? '#FFFBEB' : '#FEF2F2';
+
+  return (
+    <div style={{ background: 'white', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.08)', border: '1px solid rgba(226,232,240,0.6)' }}>
+      {/* Header */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ fontSize: '13px', color: '#64748B' }}>
+            Total Classes:
+            {editingTotal ? (
+              <span style={{ marginLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <input
+                  type="number" min="0" value={totalInput}
+                  onChange={e => setTotalInput(e.target.value)}
+                  style={{ width: '60px', border: '1.5px solid #2563EB', borderRadius: '6px', padding: '2px 6px', fontSize: '13px', outline: 'none' }}
+                  autoFocus
+                />
+                <button onClick={onSaveTotal} style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '6px', padding: '3px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>Save</button>
+                <button onClick={() => setEditingTotal(false)} style={{ background: '#F1F5F9', color: '#64748B', border: 'none', borderRadius: '6px', padding: '3px 8px', fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
+              </span>
+            ) : (
+              <span style={{ marginLeft: '6px', fontWeight: '700', color: '#0F172A' }}>
+                {attendance.total_classes}
+                <button onClick={() => setEditingTotal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '6px', fontSize: '12px', color: '#94A3B8', padding: '2px' }} title="Edit total classes">✏️</button>
+              </span>
+            )}
+          </div>
+        </div>
+        {stats && stats.total > 0 && (
+          <div style={{ background: pctBg, color: pctColor, padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
+            {stats.percentage.toFixed(1)}% attendance
+          </div>
+        )}
+      </div>
+
+      {/* Stats Row */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#F1F5F9' }}>
+          <div style={{ background: 'white', padding: '14px', textAlign: 'center' }}>
+            <div style={{ fontSize: '22px', fontWeight: '800', color: '#10B981' }}>{stats.present}</div>
+            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Present</div>
+          </div>
+          <div style={{ background: 'white', padding: '14px', textAlign: 'center' }}>
+            <div style={{ fontSize: '22px', fontWeight: '800', color: '#F59E0B' }}>{stats.late}</div>
+            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Late</div>
+          </div>
+          <div style={{ background: 'white', padding: '14px', textAlign: 'center' }}>
+            <div style={{ fontSize: '22px', fontWeight: '800', color: '#EF4444' }}>{stats.absent}</div>
+            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Absent</div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress bar */}
+      {stats && stats.total > 0 && (
+        <div style={{ padding: '12px 20px 0' }}>
+          <div style={{ background: '#F1F5F9', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(stats.percentage, 100)}%`, height: '100%', background: pctColor, borderRadius: '4px', transition: 'width 0.6s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+            <span>{stats.attended} attended</span>
+            <span>{stats.total} total</span>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div style={{ padding: '16px 20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <button onClick={() => onAddSession('present')} style={{ flex: 1, minWidth: '80px', background: '#ECFDF5', color: '#065F46', border: '1.5px solid #A7F3D0', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#D1FAE5'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#ECFDF5'; }}>
+          ✅ Present
+        </button>
+        <button onClick={() => onAddSession('late')} style={{ flex: 1, minWidth: '80px', background: '#FFFBEB', color: '#92400E', border: '1.5px solid #FDE68A', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#FEF3C7'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#FFFBEB'; }}>
+          ⏰ Late
+        </button>
+        <button onClick={() => onAddSession('absent')} style={{ flex: 1, minWidth: '80px', background: '#FEF2F2', color: '#991B1B', border: '1.5px solid #FECACA', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}>
+          ❌ Absent
+        </button>
+      </div>
+
+      {/* Sessions History */}
+      {stats && stats.sessions.length > 0 && (
+        <div style={{ borderTop: '1px solid #F1F5F9' }}>
+          <button onClick={() => setShowSessions(s => !s)} style={{ width: '100%', background: 'none', border: 'none', padding: '12px 20px', cursor: 'pointer', fontSize: '12px', color: '#64748B', fontWeight: '600', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Session History ({stats.sessions.length} sessions)</span>
+            <span>{showSessions ? '▲' : '▼'}</span>
+          </button>
+          {showSessions && (
+            <div style={{ padding: '0 20px 16px', maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {[...stats.sessions].reverse().map((session, i) => (
+                <div key={session.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '14px' }}>{session.status === 'present' ? '✅' : session.status === 'late' ? '⏰' : '❌'}</span>
+                    <span style={{ fontWeight: '600', color: session.status === 'present' ? '#065F46' : session.status === 'late' ? '#92400E' : '#991B1B', textTransform: 'capitalize' }}>{session.status}</span>
+                    <span style={{ color: '#94A3B8' }}>Session {stats.sessions.length - i}</span>
+                  </div>
+                  <button onClick={() => onDeleteSession(session.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '12px', padding: '2px 4px', borderRadius: '4px' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function generatePrintHTML(subject, gradeData, status, attendance, attendanceStats) {
   const cats = subject?.categories || [];
   const categoriesHTML = cats.map(cat => {
     const scores = cat.scores || [];
@@ -311,47 +505,14 @@ function generatePrintHTML(subject, gradeData, status) {
       const pct = (sc.score_obtained / sc.total_score) * 100;
       return `<tr><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;">${sc.label || '—'}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.score_obtained}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.total_score}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${pct>=85?'#10B981':pct>=75?'#F59E0B':'#EF4444'}">${pct.toFixed(1)}%</td></tr>`;
     }).join('');
-    return `
-      <div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-        <div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-          <div><span style="font-weight:700;color:#0f172a;">${cat.category_name}</span><span style="margin-left:10px;color:#64748b;font-size:13px;">Weight: ${cat.category_weight}%</span></div>
-          ${avg !== null ? `<div style="font-weight:800;color:${avg>=85?'#10B981':avg>=75?'#F59E0B':'#EF4444'}">${avg.toFixed(1)}% → ${weighted.toFixed(2)} pts</div>` : '<div style="color:#94a3b8;font-size:13px;">No scores yet</div>'}
-        </div>
-        ${scores.length > 0 ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;">Label</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;text-transform:uppercase;">Obtained</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;text-transform:uppercase;">Total</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;text-transform:uppercase;">%</th></tr></thead><tbody>${scoresHTML}</tbody></table>` : '<div style="padding:12px 14px;color:#94a3b8;font-size:13px;font-style:italic;">No scores recorded</div>'}
-      </div>`;
+    return `<div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"><div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><div><span style="font-weight:700;color:#0f172a;">${cat.category_name}</span><span style="margin-left:10px;color:#64748b;font-size:13px;">Weight: ${cat.category_weight}%</span></div>${avg !== null ? `<div style="font-weight:800;color:${avg>=85?'#10B981':avg>=75?'#F59E0B':'#EF4444'}">${avg.toFixed(1)}% → ${weighted.toFixed(2)} pts</div>` : '<div style="color:#94a3b8;font-size:13px;">No scores yet</div>'}</div>${scores.length > 0 ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;color:#64748b;font-size:11px;">Label</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Obtained</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Total</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">%</th></tr></thead><tbody>${scoresHTML}</tbody></table>` : '<div style="padding:12px 14px;color:#94a3b8;font-size:13px;font-style:italic;">No scores recorded</div>'}</div>`;
   }).join('');
 
   const gradeColor = gradeData ? (gradeData.grade >= 85 ? '#10B981' : gradeData.grade >= 75 ? '#F59E0B' : '#EF4444') : '#94A3B8';
   const gradeLabel = gradeData ? (gradeData.grade >= 85 ? '✅ On Track' : gradeData.grade >= 75 ? '⚠️ Needs Improvement' : '🚨 At Risk') : 'No grade yet';
+  const attendanceHTML = attendanceStats ? `<div style="margin-top:24px;border:1px solid #e2e8f0;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#0f172a;">📅 Attendance Summary</h2><div style="display:flex;gap:20px;"><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#10B981;">${attendanceStats.present}</div><div style="font-size:11px;color:#64748b;">Present</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#F59E0B;">${attendanceStats.late}</div><div style="font-size:11px;color:#64748b;">Late</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#EF4444;">${attendanceStats.absent}</div><div style="font-size:11px;color:#64748b;">Absent</div></div><div style="text-align:center;margin-left:auto;"><div style="font-size:20px;font-weight:800;color:${attendanceStats.percentage>=75?'#10B981':attendanceStats.percentage>=50?'#F59E0B':'#EF4444'};">${attendanceStats.percentage.toFixed(1)}%</div><div style="font-size:11px;color:#64748b;">${attendanceStats.attended}/${attendanceStats.total} classes</div></div></div></div>` : '';
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grade Report - ${subject.subject_name}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;color:#0f172a;padding:32px;background:white;font-size:14px;}@media print{body{padding:16px;}}</style></head><body>
-    <div style="border-bottom:3px solid #2563EB;padding-bottom:20px;margin-bottom:24px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📊 GradeTrack — Grade Report</div>
-          <h1 style="font-size:26px;font-weight:800;color:#0f172a;">${subject.subject_name}</h1>
-          ${subject.instructor_name ? `<div style="color:#64748b;margin-top:4px;">👤 ${subject.instructor_name}</div>` : ''}
-          ${subject.semester ? `<div style="color:#64748b;">📅 ${subject.semester}</div>` : ''}
-        </div>
-        ${gradeData ? `<div style="text-align:center;"><div style="font-size:36px;font-weight:800;color:${gradeColor};">${gradeData.grade.toFixed(2)}%</div><div style="font-size:13px;font-weight:600;color:${gradeColor};">${gradeLabel}</div></div>` : ''}
-      </div>
-      <div style="margin-top:10px;font-size:12px;color:#94a3b8;">Generated: ${new Date().toLocaleString()}</div>
-    </div>
-    <h2 style="font-size:16px;font-weight:700;margin-bottom:14px;">Grade Categories & Scores</h2>
-    ${categoriesHTML}
-    ${gradeData ? `
-    <div style="margin-top:24px;border:2px solid #2563EB;border-radius:8px;padding:16px;">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#2563EB;">Final Grade Summary</h2>
-      ${cats.filter(c => c.scores?.length > 0).map(cat => {
-        const sumObt = cat.scores.reduce((s, sc) => s + sc.score_obtained, 0);
-        const sumTot = cat.scores.reduce((s, sc) => s + sc.total_score, 0);
-        const avg = sumTot > 0 ? (sumObt / sumTot) * 100 : 0;
-        const weighted = avg * (cat.category_weight / 100);
-        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>${cat.category_name}</span><span>${avg.toFixed(1)}% × ${cat.category_weight}% = <strong style="color:#2563EB;">${weighted.toFixed(2)}</strong></span></div>`;
-      }).join('')}
-      <div style="display:flex;justify-content:space-between;padding-top:12px;font-size:18px;font-weight:800;"><span>Final Grade</span><span style="color:${gradeColor};">${gradeData.grade.toFixed(2)}%</span></div>
-    </div>` : ''}
-  </body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grade Report - ${subject.subject_name}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;color:#0f172a;padding:32px;background:white;font-size:14px;}</style></head><body><div style="border-bottom:3px solid #2563EB;padding-bottom:20px;margin-bottom:24px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📊 GradeTrack — Grade Report</div><h1 style="font-size:26px;font-weight:800;color:#0f172a;">${subject.subject_name}</h1>${subject.instructor_name ? `<div style="color:#64748b;margin-top:4px;">👤 ${subject.instructor_name}</div>` : ''}${subject.semester ? `<div style="color:#64748b;">📅 ${subject.semester}</div>` : ''}</div>${gradeData ? `<div style="text-align:center;"><div style="font-size:36px;font-weight:800;color:${gradeColor};">${gradeData.grade.toFixed(2)}%</div><div style="font-size:13px;font-weight:600;color:${gradeColor};">${gradeLabel}</div></div>` : ''}</div><div style="margin-top:10px;font-size:12px;color:#94a3b8;">Generated: ${new Date().toLocaleString()}</div></div><h2 style="font-size:16px;font-weight:700;margin-bottom:14px;">Grade Categories & Scores</h2>${categoriesHTML}${gradeData ? `<div style="margin-top:24px;border:2px solid #2563EB;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#2563EB;">Final Grade Summary</h2>${cats.filter(c=>c.scores?.length>0).map(cat=>{const sumObt=cat.scores.reduce((s,sc)=>s+sc.score_obtained,0);const sumTot=cat.scores.reduce((s,sc)=>s+sc.total_score,0);const avg=sumTot>0?(sumObt/sumTot)*100:0;const weighted=avg*(cat.category_weight/100);return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>${cat.category_name}</span><span>${avg.toFixed(1)}% × ${cat.category_weight}% = <strong style="color:#2563EB;">${weighted.toFixed(2)}</strong></span></div>`;}).join('')}<div style="display:flex;justify-content:space-between;padding-top:12px;font-size:18px;font-weight:800;"><span>Final Grade</span><span style="color:${gradeColor};">${gradeData.grade.toFixed(2)}%</span></div></div>` : ''}${attendanceHTML}</body></html>`;
 }
 
 function WeightBar({ categories }) {

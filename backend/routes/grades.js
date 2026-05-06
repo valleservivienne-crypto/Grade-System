@@ -178,4 +178,121 @@ router.delete('/scores/:id', async (req, res) => {
   }
 });
 
+// === ATTENDANCE ===
+
+// Get or create attendance record for a subject
+router.get('/subjects/:subjectId/attendance', async (req, res) => {
+  try {
+    const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
+    if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+    let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
+    if (!attendance) {
+      const result = await run2(
+        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, 0) RETURNING id',
+        [req.params.subjectId]
+      );
+      attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
+    }
+
+    const sessions = await all2(
+      'SELECT * FROM attendance_sessions WHERE attendance_id = $1 ORDER BY created_at ASC',
+      [attendance.id]
+    );
+
+    res.json({ ...attendance, sessions });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update total classes
+router.put('/subjects/:subjectId/attendance', async (req, res) => {
+  try {
+    const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
+    if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+    const { total_classes } = req.body;
+    const total = parseInt(total_classes);
+    if (isNaN(total) || total < 0)
+      return res.status(400).json({ error: 'Total classes must be a positive number' });
+
+    let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
+    if (!attendance) {
+      const result = await run2(
+        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, $2) RETURNING id',
+        [req.params.subjectId, total]
+      );
+      attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
+    } else {
+      await run2(
+        'UPDATE attendance SET total_classes = $1, updated_at = CURRENT_TIMESTAMP WHERE subject_id = $2',
+        [total, req.params.subjectId]
+      );
+      attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
+    }
+
+    const sessions = await all2(
+      'SELECT * FROM attendance_sessions WHERE attendance_id = $1 ORDER BY created_at ASC',
+      [attendance.id]
+    );
+
+    res.json({ ...attendance, sessions });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Add attendance session (present/absent/late)
+router.post('/subjects/:subjectId/attendance/sessions', async (req, res) => {
+  try {
+    const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
+    if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+    const { status, label } = req.body;
+    if (!['present', 'absent', 'late'].includes(status))
+      return res.status(400).json({ error: 'Status must be present, absent, or late' });
+
+    let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
+    if (!attendance) {
+      const result = await run2(
+        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, 0) RETURNING id',
+        [req.params.subjectId]
+      );
+      attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
+    }
+
+    const result = await run2(
+      'INSERT INTO attendance_sessions (attendance_id, status, label) VALUES ($1, $2, $3) RETURNING id',
+      [attendance.id, status, label || '']
+    );
+    const session = await get2('SELECT * FROM attendance_sessions WHERE id = $1', [result.lastInsertRowid]);
+    res.status(201).json(session);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete attendance session
+router.delete('/attendance/sessions/:id', async (req, res) => {
+  try {
+    const session = await get2(`
+      SELECT s.* FROM attendance_sessions s
+      JOIN attendance a ON s.attendance_id = a.id
+      JOIN subjects sub ON a.subject_id = sub.id
+      WHERE s.id = $1 AND sub.user_id = $2
+    `, [req.params.id, req.user.id]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    await run2('DELETE FROM attendance_sessions WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Session deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

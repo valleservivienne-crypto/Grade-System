@@ -447,7 +447,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
   const pctBg = stats?.percentage >= 75 ? '#ECFDF5' : stats?.percentage >= 50 ? '#FFFBEB' : '#FEF2F2';
 
   return (
-    <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', borderRadius: '14px' }}>
 
       {/* LOCKED STATE — blurred content with prompt overlay */}
       {isUnset && (

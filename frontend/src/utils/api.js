@@ -47,8 +47,8 @@ export const api = {
   deleteAttendanceSession: (id) => request('DELETE', `/attendance/sessions/${id}`),
 };
 
-// Grade calculation utilities
-export const calculateGrade = (categories) => {
+// Grade calculation — now includes attendance if mode is with_grade
+export const calculateGrade = (categories, attendance = null) => {
   if (!categories || categories.length === 0) return null;
 
   let finalGrade = 0;
@@ -56,16 +56,28 @@ export const calculateGrade = (categories) => {
 
   for (const cat of categories) {
     if (!cat.scores || cat.scores.length === 0) continue;
-
     const sumObtained = cat.scores.reduce((s, sc) => s + sc.score_obtained, 0);
     const sumTotal = cat.scores.reduce((s, sc) => s + sc.total_score, 0);
-
     if (sumTotal === 0) continue;
-
     const catAvg = (sumObtained / sumTotal) * 100;
     const weighted = catAvg * (cat.category_weight / 100);
     finalGrade += weighted;
     totalWeight += cat.category_weight;
+  }
+
+  // Include attendance in grade if mode is with_grade
+  if (attendance && attendance.mode === 'with_grade' && attendance.attendance_weight > 0) {
+    const sessions = attendance.sessions || [];
+    const present = sessions.filter(s => s.status === 'present').length;
+    const late = sessions.filter(s => s.status === 'late').length;
+    const attended = present + late;
+    const total = attendance.total_classes || 0;
+    if (total > 0) {
+      const attPct = (attended / total) * 100;
+      const attWeighted = attPct * (attendance.attendance_weight / 100);
+      finalGrade += attWeighted;
+      totalWeight += attendance.attendance_weight;
+    }
   }
 
   if (totalWeight === 0) return null;
@@ -85,22 +97,17 @@ export const getTrend = (categories) => {
       allScores.push({ pct: (sc.score_obtained / sc.total_score) * 100, date: sc.created_at });
     }
   }
-
   if (allScores.length < 3) return null;
-
   const recent = allScores.slice(-3).map(s => s.pct);
   const first = recent[0], last = recent[recent.length - 1];
   const diff = last - first;
-
   if (diff > 5) return { type: 'improving', msg: 'Your scores are trending upward 📈' };
   if (diff < -5) return { type: 'declining', msg: 'Your recent scores are declining 📉' };
   return { type: 'stable', msg: 'Your performance is consistent 📊' };
 };
 
-// expectedScores: { [categoryId]: { obtained: number, total: number }[] }
 export const calculateWithExpected = (categories, targetGrade, expectedScores = {}) => {
   if (!categories || categories.length === 0) return null;
-
   const totalWeight = categories.reduce((s, c) => s + c.category_weight, 0);
   if (totalWeight === 0) return null;
 
@@ -111,16 +118,10 @@ export const calculateWithExpected = (categories, targetGrade, expectedScores = 
     const existing = cat.scores || [];
     const expected = expectedScores[cat.id] || [];
     const allScores = [...existing, ...expected];
-
-    if (allScores.length === 0) {
-      breakdown.push({ cat, avg: null, weighted: 0, hasExpected: false });
-      continue;
-    }
-
+    if (allScores.length === 0) { breakdown.push({ cat, avg: null, weighted: 0, hasExpected: false }); continue; }
     const sumObtained = allScores.reduce((s, sc) => s + sc.score_obtained, 0);
     const sumTotal = allScores.reduce((s, sc) => s + sc.total_score, 0);
     if (sumTotal === 0) continue;
-
     const avg = (sumObtained / sumTotal) * 100;
     const weighted = avg * (cat.category_weight / 100);
     projectedWeighted += weighted;
@@ -129,13 +130,11 @@ export const calculateWithExpected = (categories, targetGrade, expectedScores = 
 
   const gap = targetGrade - projectedWeighted;
   const status = gap <= 0 ? 'achieved' : 'not_yet';
-
   return { projectedGrade: projectedWeighted, targetGrade, gap, status, breakdown };
 };
 
 export const calculateRequiredAverage = (categories, targetGrade) => {
   if (!categories || categories.length === 0) return null;
-
   const totalWeight = categories.reduce((s, c) => s + c.category_weight, 0);
   if (totalWeight === 0) return null;
 
@@ -153,18 +152,14 @@ export const calculateRequiredAverage = (categories, targetGrade) => {
   }
 
   const remainingWeight = totalWeight - completedWeight;
-
   if (remainingWeight <= 0) {
     const finalGrade = completedWeight > 0 ? currentWeighted : null;
-    if (finalGrade !== null && finalGrade >= targetGrade) {
-      return { status: 'achieved', currentGrade: finalGrade, maxPossible: finalGrade };
-    }
+    if (finalGrade !== null && finalGrade >= targetGrade) return { status: 'achieved', currentGrade: finalGrade, maxPossible: finalGrade };
     return { status: 'impossible', currentGrade: finalGrade, maxPossible: finalGrade };
   }
 
   const required = (targetGrade - currentWeighted) / (remainingWeight / 100);
   const maxPossible = currentWeighted + remainingWeight;
-
   if (required > 100) return { status: 'impossible', required, currentWeighted, remainingWeight, maxPossible };
   if (required <= 0) return { status: 'achieved', currentWeighted, remainingWeight, maxPossible };
   return { status: 'possible', required, currentWeighted, remainingWeight, maxPossible };

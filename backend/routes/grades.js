@@ -180,7 +180,6 @@ router.delete('/scores/:id', async (req, res) => {
 
 // === ATTENDANCE ===
 
-// Get or create attendance record for a subject
 router.get('/subjects/:subjectId/attendance', async (req, res) => {
   try {
     const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
@@ -189,8 +188,8 @@ router.get('/subjects/:subjectId/attendance', async (req, res) => {
     let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
     if (!attendance) {
       const result = await run2(
-        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, 0) RETURNING id',
-        [req.params.subjectId]
+        'INSERT INTO attendance (subject_id, total_classes, mode, attendance_weight) VALUES ($1, 0, $2, 0) RETURNING id',
+        [req.params.subjectId, 'unset']
       );
       attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
     }
@@ -207,28 +206,29 @@ router.get('/subjects/:subjectId/attendance', async (req, res) => {
   }
 });
 
-// Update total classes
 router.put('/subjects/:subjectId/attendance', async (req, res) => {
   try {
     const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
 
-    const { total_classes } = req.body;
-    const total = parseInt(total_classes);
-    if (isNaN(total) || total < 0)
-      return res.status(400).json({ error: 'Total classes must be a positive number' });
+    const { total_classes, mode, attendance_weight } = req.body;
 
     let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
+
     if (!attendance) {
       const result = await run2(
-        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, $2) RETURNING id',
-        [req.params.subjectId, total]
+        'INSERT INTO attendance (subject_id, total_classes, mode, attendance_weight) VALUES ($1, $2, $3, $4) RETURNING id',
+        [req.params.subjectId, total_classes ?? 0, mode ?? 'unset', attendance_weight ?? 0]
       );
       attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
     } else {
+      const newTotal = total_classes !== undefined ? parseInt(total_classes) : attendance.total_classes;
+      const newMode = mode !== undefined ? mode : attendance.mode;
+      const newWeight = attendance_weight !== undefined ? parseFloat(attendance_weight) : attendance.attendance_weight;
+
       await run2(
-        'UPDATE attendance SET total_classes = $1, updated_at = CURRENT_TIMESTAMP WHERE subject_id = $2',
-        [total, req.params.subjectId]
+        'UPDATE attendance SET total_classes = $1, mode = $2, attendance_weight = $3, updated_at = CURRENT_TIMESTAMP WHERE subject_id = $4',
+        [newTotal, newMode, newWeight, req.params.subjectId]
       );
       attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
     }
@@ -245,7 +245,6 @@ router.put('/subjects/:subjectId/attendance', async (req, res) => {
   }
 });
 
-// Add attendance session (present/absent/late)
 router.post('/subjects/:subjectId/attendance/sessions', async (req, res) => {
   try {
     const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
@@ -258,10 +257,19 @@ router.post('/subjects/:subjectId/attendance/sessions', async (req, res) => {
     let attendance = await get2('SELECT * FROM attendance WHERE subject_id = $1', [req.params.subjectId]);
     if (!attendance) {
       const result = await run2(
-        'INSERT INTO attendance (subject_id, total_classes) VALUES ($1, 0) RETURNING id',
-        [req.params.subjectId]
+        'INSERT INTO attendance (subject_id, total_classes, mode, attendance_weight) VALUES ($1, 0, $2, 0) RETURNING id',
+        [req.params.subjectId, 'unset']
       );
       attendance = await get2('SELECT * FROM attendance WHERE id = $1', [result.lastInsertRowid]);
+    }
+
+    // Check session limit
+    const sessionCount = await get2(
+      'SELECT COUNT(*) as count FROM attendance_sessions WHERE attendance_id = $1',
+      [attendance.id]
+    );
+    if (attendance.total_classes > 0 && parseInt(sessionCount.count) >= attendance.total_classes) {
+      return res.status(400).json({ error: `Maximum sessions reached (${attendance.total_classes})` });
     }
 
     const result = await run2(
@@ -276,7 +284,6 @@ router.post('/subjects/:subjectId/attendance/sessions', async (req, res) => {
   }
 });
 
-// Delete attendance session
 router.delete('/attendance/sessions/:id', async (req, res) => {
   try {
     const session = await get2(`

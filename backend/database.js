@@ -5,7 +5,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Initialize tables
 const initDB = async () => {
   const client = await pool.connect();
   try {
@@ -51,10 +50,15 @@ const initDB = async () => {
         id SERIAL PRIMARY KEY,
         subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
         total_classes INTEGER NOT NULL DEFAULT 0,
+        mode TEXT NOT NULL DEFAULT 'unset',
+        attendance_weight REAL NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Add columns if they don't exist (for existing databases)
+    await client.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'unset'`);
+    await client.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS attendance_weight REAL NOT NULL DEFAULT 0`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS attendance_sessions (
         id SERIAL PRIMARY KEY,

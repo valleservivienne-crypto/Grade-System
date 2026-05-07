@@ -60,7 +60,8 @@ export default function Dashboard() {
     try {
       const data = await api.getSubjects();
       const full = await Promise.all(data.map(s => api.getSubject(s.id)));
-      setSubjects(full);
+      const attendances = await Promise.all(full.map(s => api.getAttendance(s.id).catch(() => null)));
+      setSubjects(full.map((s, i) => ({ ...s, attendance: attendances[i] })));
     } catch (err) { console.error('Failed to load subjects:', err); }
     finally { setLoading(false); }
   }, []);
@@ -82,7 +83,7 @@ export default function Dashboard() {
   };
 
   const stats = (() => {
-    const withGrades = subjects.map(s => { const g = calculateGrade(s.categories); return g ? g.grade : null; }).filter(g => g !== null);
+    const withGrades = subjects.map(s => { const g = calculateGrade(s.categories, s.attendance); return g ? g.grade : null; }).filter(g => g !== null);
     return { total: subjects.length, avg: withGrades.length ? withGrades.reduce((a, b) => a + b, 0) / withGrades.length : null, onTrack: withGrades.filter(g => g >= 85).length, atRisk: withGrades.filter(g => g < 75).length };
   })();
 
@@ -91,9 +92,9 @@ export default function Dashboard() {
     .sort((a, b) => {
       if (sortBy === 'name-asc') return a.subject_name.localeCompare(b.subject_name);
       if (sortBy === 'name-desc') return b.subject_name.localeCompare(a.subject_name);
-      if (sortBy === 'grade-high') { const ga = calculateGrade(a.categories)?.grade ?? -1; const gb = calculateGrade(b.categories)?.grade ?? -1; return gb - ga; }
-      if (sortBy === 'grade-low') { const ga = calculateGrade(a.categories)?.grade ?? 101; const gb = calculateGrade(b.categories)?.grade ?? 101; return ga - gb; }
-      if (sortBy === 'at-risk') { const ga = calculateGrade(a.categories)?.grade ?? 100; const gb = calculateGrade(b.categories)?.grade ?? 100; return ga - gb; }
+      if (sortBy === 'grade-high') { const ga = calculateGrade(a.categories, a.attendance)?.grade ?? -1; const gb = calculateGrade(b.categories, b.attendance)?.grade ?? -1; return gb - ga; }
+      if (sortBy === 'grade-low') { const ga = calculateGrade(a.categories, a.attendance)?.grade ?? 101; const gb = calculateGrade(b.categories, b.attendance)?.grade ?? 101; return ga - gb; }
+      if (sortBy === 'at-risk') { const ga = calculateGrade(a.categories, a.attendance)?.grade ?? 100; const gb = calculateGrade(b.categories, b.attendance)?.grade ?? 100; return ga - gb; }
       return 0;
     });
 
@@ -319,7 +320,7 @@ function StatCard({ icon, label, value, color }) {
 }
 
 function SubjectCard({ subject, delay, onClick, onEdit, onDelete }) {
-  const gradeData = calculateGrade(subject.categories);
+  const gradeData = calculateGrade(subject.categories, subject.attendance);
   const status = gradeData ? getGradeStatus(gradeData.grade) : null;
   const totalWeight = (subject.categories || []).reduce((s, c) => s + c.category_weight, 0);
   return (

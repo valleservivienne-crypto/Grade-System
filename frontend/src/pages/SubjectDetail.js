@@ -163,6 +163,8 @@ export default function SubjectDetail() {
         @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         @keyframes unlockPulse { 0% { transform:scale(1); } 50% { transform:scale(1.02); } 100% { transform:scale(1); } }
+        @keyframes attendanceFadeIn { from { opacity:0; transform:scale(0.97) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        @keyframes attendanceUnlock { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         @media print { body { margin: 0; } }
       `}</style>
 
@@ -449,57 +451,144 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
   return (
     <div style={{ position: 'relative', borderRadius: '14px' }}>
 
-      {/* LOCKED STATE — blurred content with prompt overlay */}
+      {/* LOCKED STATE — polished glassmorphism prompt card */}
       {isUnset && (
-        <div style={{ position: 'relative' }}>
-          {/* Blurred background preview */}
-          <div style={{ filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none', background: 'white', borderRadius: '14px', border: '1px solid rgba(226,232,240,0.6)', padding: '20px', opacity: 0.5 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: '#F1F5F9', marginBottom: '12px' }}>
+        <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden' }}>
+          {/* Blurred ghost preview underneath */}
+          <div style={{
+            filter: 'blur(6px)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            background: 'white',
+            borderRadius: '16px',
+            border: '1px solid rgba(226,232,240,0.5)',
+            padding: '20px',
+            opacity: 0.35,
+            transform: 'scale(0.98)',
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: '#E8EDF5', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
               {['Present','Late','Absent'].map(l => (
-                <div key={l} style={{ background: 'white', padding: '14px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '22px', fontWeight: '800', color: '#CBD5E1' }}>0</div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8' }}>{l}</div>
+                <div key={l} style={{ background: 'white', padding: '16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: '800', color: '#D1D9E6' }}>0</div>
+                  <div style={{ fontSize: '11px', color: '#B8C4D4', marginTop: '2px' }}>{l}</div>
                 </div>
               ))}
             </div>
+            <div style={{ background: '#E8EDF5', borderRadius: '8px', height: '6px', marginBottom: '14px' }} />
             <div style={{ display: 'flex', gap: '8px' }}>
               {['✅ Present','⏰ Late','❌ Absent'].map(l => (
-                <div key={l} style={{ flex: 1, background: '#F1F5F9', borderRadius: '8px', padding: '8px', textAlign: 'center', fontSize: '13px', color: '#CBD5E1' }}>{l}</div>
+                <div key={l} style={{ flex: 1, background: '#F0F4FA', borderRadius: '8px', padding: '9px', textAlign: 'center', fontSize: '12px', color: '#C8D1E0', fontWeight: '600' }}>{l}</div>
               ))}
             </div>
           </div>
 
-          {/* Overlay prompt */}
+          {/* Glassmorphism overlay */}
           <div style={{
-            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(2px)', borderRadius: '14px',
-            border: '2px dashed #BFDBFE',
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(145deg, rgba(239,244,255,0.92) 0%, rgba(255,255,255,0.96) 60%)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            animation: 'attendanceFadeIn 0.4s ease',
           }}>
-            <div style={{ textAlign: 'center', padding: '24px', maxWidth: '320px' }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>📅</div>
-              <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#0F172A', marginBottom: '8px' }}>
+            {/* Decorative ring */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '16px',
+              border: '1.5px solid rgba(37,99,235,0.15)',
+              pointerEvents: 'none',
+            }} />
+
+            <div style={{ textAlign: 'center', padding: '32px 28px', maxWidth: '340px', width: '100%' }}>
+              {/* Icon with soft glow */}
+              <div style={{
+                width: '56px', height: '56px',
+                background: 'linear-gradient(135deg, #EFF4FF, #DBEAFE)',
+                borderRadius: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '26px',
+                margin: '0 auto 16px',
+                boxShadow: '0 4px 20px rgba(37,99,235,0.15)',
+              }}>📅</div>
+
+              <h3 style={{
+                fontSize: '16px', fontWeight: '800', color: '#0F172A',
+                marginBottom: '8px', letterSpacing: '-0.3px',
+              }}>
                 Attendance Tracker
               </h3>
-              <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '20px', lineHeight: '1.6' }}>
-                Does your professor include <strong>attendance</strong> in the grading system for this subject?
+              <p style={{
+                fontSize: '13px', color: '#64748B',
+                marginBottom: '24px', lineHeight: '1.65',
+              }}>
+                Does your professor include{' '}
+                <span style={{ fontWeight: '700', color: '#2563EB' }}>attendance</span>{' '}
+                in the grading system for this subject?
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button
                   onClick={() => { setChoosingMode(false); onSetMode('with_grade'); }}
-                  style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.3)', transition: 'all 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
-                  ✅ Yes — Include in Grade Calculation
+                  style={{
+                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                    color: 'white', border: 'none', borderRadius: '12px',
+                    padding: '13px 20px', fontSize: '13px', fontWeight: '700',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(37,99,235,0.35)',
+                    transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    letterSpacing: '-0.1px',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(37,99,235,0.45)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,99,235,0.35)';
+                  }}>
+                  <span style={{ fontSize: '15px' }}>✅</span>
+                  Yes — Include in Grade Calculation
                 </button>
+
                 <button
                   onClick={() => { setChoosingMode(false); onSetMode('track_only'); }}
-                  style={{ background: 'white', color: '#374151', border: '1.5px solid #E2E8F0', borderRadius: '10px', padding: '10px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'white'}>
-                  📊 No — Just Track My Attendance
+                  style={{
+                    background: 'white',
+                    color: '#374151', border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px', padding: '12px 20px',
+                    fontSize: '13px', fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    boxShadow: '0 1px 4px rgba(15,23,42,0.06)',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = '#F8FAFF';
+                    e.currentTarget.style.borderColor = '#BFDBFE';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,0.08)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'white';
+                    e.currentTarget.style.borderColor = '#E2E8F0';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 1px 4px rgba(15,23,42,0.06)';
+                  }}>
+                  <span style={{ fontSize: '15px' }}>📊</span>
+                  No — Just Track My Attendance
                 </button>
               </div>
-              <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '12px' }}>
+
+              <p style={{
+                fontSize: '11px', color: '#94A3B8',
+                marginTop: '16px', letterSpacing: '0.1px',
+              }}>
                 You can change this setting anytime
               </p>
             </div>
@@ -509,7 +598,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
 
       {/* UNLOCKED STATE */}
       {!isUnset && (
-        <div style={{ background: 'white', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.08)', border: `1px solid ${isWithGrade ? '#BFDBFE' : 'rgba(226,232,240,0.6)'}` }}>
+        <div style={{ background: 'white', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.08)', border: `1px solid ${isWithGrade ? '#BFDBFE' : 'rgba(226,232,240,0.6)'}`, animation: 'attendanceUnlock 0.35s cubic-bezier(0.22,1,0.36,1)' }}>
 
           {/* Mode badge */}
           <div style={{ padding: '10px 20px', background: isWithGrade ? '#EFF4FF' : '#F8FAFC', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

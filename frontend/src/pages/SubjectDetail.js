@@ -464,6 +464,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
             border: '1px solid rgba(226,232,240,0.5)',
             padding: '20px',
             opacity: 0.35,
+            minHeight: '320px',
             transform: 'scale(0.98)',
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: '#E8EDF5', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>

@@ -46,10 +46,6 @@ export const api = {
   addAttendanceSession: (subjectId, body) => request('POST', `/subjects/${subjectId}/attendance/sessions`, body),
   deleteAttendanceSession: (id) => request('DELETE', `/attendance/sessions/${id}`),
 
-  // Grade Snapshots (Feature 1)
-  getSnapshots: (subjectId) => request('GET', `/subjects/${subjectId}/snapshots`),
-  createSnapshot: (subjectId, body) => request('POST', `/subjects/${subjectId}/snapshots`, body),
-  deleteSnapshot: (id) => request('DELETE', `/snapshots/${id}`),
 
   // User Settings (Feature 5)
   getSettings: () => request('GET', '/settings'),
@@ -117,41 +113,6 @@ export const gradeToGPA = (grade) => {
   return 0.0;
 };
 
-// CSV Export (Feature 4)
-export const exportSubjectCSV = (subject, attendance = null) => {
-  const rows = [['Category', 'Weight (%)', 'Label', 'Date Taken', 'Score', 'Total', 'Percentage']];
-  for (const cat of subject.categories || []) {
-    for (const sc of cat.scores || []) {
-      rows.push([
-        cat.category_name,
-        cat.category_weight,
-        sc.label || '',
-        sc.date_taken || '',
-        sc.score_obtained,
-        sc.total_score,
-        ((sc.score_obtained / sc.total_score) * 100).toFixed(2) + '%',
-      ]);
-    }
-  }
-  if (attendance && attendance.sessions?.length) {
-    rows.push([]);
-    rows.push(['Attendance Sessions', '', '', '', '', '', '']);
-    rows.push(['Date', 'Status', 'Label', '', '', '', '']);
-    for (const s of attendance.sessions) {
-      rows.push([s.created_at?.split('T')[0] || '', s.status, s.label || '', '', '', '', '']);
-    }
-  }
-  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${subject.subject_name.replace(/[^a-z0-9]/gi, '_')}_grades.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
 
 export const getTrend = (categories) => {
   const allScores = [];

@@ -5,13 +5,14 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import SubjectDetail from './pages/SubjectDetail';
+import SemesterSummary from './pages/SemesterSummary';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎓</div>
+        <div style={{ marginBottom: '12px' }}><svg width='40' height='40' viewBox='0 0 24 24' fill='none'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' stroke='#2563EB' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'/></svg></div>
         <p style={{ color: '#64748B', fontSize: '14px' }}>Loading GradeTrack...</p>
       </div>
     </div>
@@ -50,6 +51,7 @@ function App() {
           <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/subject/:id" element={<PrivateRoute><SubjectDetail /></PrivateRoute>} />
+          <Route path="/semester-summary" element={<PrivateRoute><SemesterSummary /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>

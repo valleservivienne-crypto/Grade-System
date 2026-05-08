@@ -103,7 +103,7 @@ router.post('/categories/:categoryId/scores', async (req, res) => {
     const category = await verifyCategoryOwnership(req.params.categoryId, req.user.id);
     if (!category) return res.status(404).json({ error: 'Category not found' });
 
-    const { score_obtained, total_score, label } = req.body;
+    const { score_obtained, total_score, label, date_taken } = req.body;
     const obtained = parseFloat(score_obtained);
     const total = parseFloat(total_score);
 
@@ -117,8 +117,8 @@ router.post('/categories/:categoryId/scores', async (req, res) => {
       return res.status(400).json({ error: 'Total score must be greater than 0' });
 
     const result = await run2(
-      'INSERT INTO scores (category_id, score_obtained, total_score, label) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.params.categoryId, obtained, total, label || '']
+      'INSERT INTO scores (category_id, score_obtained, total_score, label, date_taken) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [req.params.categoryId, obtained, total, label || '', date_taken || null]
     );
     const score = await get2('SELECT * FROM scores WHERE id = $1', [result.lastInsertRowid]);
     res.status(201).json(score);
@@ -137,7 +137,7 @@ router.put('/scores/:id', async (req, res) => {
     `, [req.params.id, req.user.id]);
     if (!score) return res.status(404).json({ error: 'Score not found' });
 
-    const { score_obtained, total_score, label } = req.body;
+    const { score_obtained, total_score, label, date_taken } = req.body;
     const obtained = parseFloat(score_obtained);
     const total = parseFloat(total_score);
 
@@ -151,8 +151,8 @@ router.put('/scores/:id', async (req, res) => {
       return res.status(400).json({ error: 'Total score must be greater than 0' });
 
     await run2(
-      'UPDATE scores SET score_obtained = $1, total_score = $2, label = $3 WHERE id = $4',
-      [obtained, total, label || '', req.params.id]
+      'UPDATE scores SET score_obtained = $1, total_score = $2, label = $3, date_taken = $4 WHERE id = $5',
+      [obtained, total, label || '', date_taken || null, req.params.id]
     );
     const updated = await get2('SELECT * FROM scores WHERE id = $1', [req.params.id]);
     res.json(updated);
@@ -303,3 +303,91 @@ router.delete('/attendance/sessions/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// === GRADE SNAPSHOTS (Feature 1: Grade History) ===
+
+router.get('/subjects/:subjectId/snapshots', async (req, res) => {
+  try {
+    const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
+    if (!subject) return res.status(404).json({ error: 'Subject not found' });
+    const snapshots = await all2(
+      'SELECT * FROM grade_snapshots WHERE subject_id = $1 ORDER BY snapshot_date ASC, created_at ASC',
+      [req.params.subjectId]
+    );
+    res.json(snapshots);
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/subjects/:subjectId/snapshots', async (req, res) => {
+  try {
+    const subject = await verifySubjectOwnership(req.params.subjectId, req.user.id);
+    if (!subject) return res.status(404).json({ error: 'Subject not found' });
+    const { grade, label, snapshot_date } = req.body;
+    if (grade === undefined || isNaN(parseFloat(grade)))
+      return res.status(400).json({ error: 'Grade is required' });
+    const result = await run2(
+      'INSERT INTO grade_snapshots (subject_id, grade, label, snapshot_date) VALUES ($1, $2, $3, $4) RETURNING id',
+      [req.params.subjectId, parseFloat(grade), label || '', snapshot_date || new Date().toISOString().split('T')[0]]
+    );
+    const snapshot = await get2('SELECT * FROM grade_snapshots WHERE id = $1', [result.lastInsertRowid]);
+    res.status(201).json(snapshot);
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.delete('/snapshots/:id', async (req, res) => {
+  try {
+    const snap = await get2(`
+      SELECT gs.* FROM grade_snapshots gs
+      JOIN subjects s ON gs.subject_id = s.id
+      WHERE gs.id = $1 AND s.user_id = $2
+    `, [req.params.id, req.user.id]);
+    if (!snap) return res.status(404).json({ error: 'Snapshot not found' });
+    await run2('DELETE FROM grade_snapshots WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Snapshot deleted' });
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// === USER SETTINGS (Feature 5: Grade Thresholds) ===
+
+router.get('/settings', async (req, res) => {
+  try {
+    let settings = await get2('SELECT * FROM user_settings WHERE user_id = $1', [req.user.id]);
+    if (!settings) {
+      const result = await run2(
+        'INSERT INTO user_settings (user_id, on_track_threshold, needs_improvement_threshold) VALUES ($1, 85, 75) RETURNING id',
+        [req.user.id]
+      );
+      settings = await get2('SELECT * FROM user_settings WHERE id = $1', [result.lastInsertRowid]);
+    }
+    res.json(settings);
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.put('/settings', async (req, res) => {
+  try {
+    const { on_track_threshold, needs_improvement_threshold } = req.body;
+    const onTrack = parseFloat(on_track_threshold);
+    const needsImprovement = parseFloat(needs_improvement_threshold);
+    if (isNaN(onTrack) || isNaN(needsImprovement))
+      return res.status(400).json({ error: 'Thresholds must be numbers' });
+    if (onTrack <= needsImprovement)
+      return res.status(400).json({ error: 'On Track threshold must be higher than Needs Improvement' });
+    if (onTrack > 100 || needsImprovement < 0)
+      return res.status(400).json({ error: 'Thresholds must be between 0 and 100' });
+
+    let settings = await get2('SELECT * FROM user_settings WHERE user_id = $1', [req.user.id]);
+    if (!settings) {
+      await run2(
+        'INSERT INTO user_settings (user_id, on_track_threshold, needs_improvement_threshold) VALUES ($1, $2, $3)',
+        [req.user.id, onTrack, needsImprovement]
+      );
+    } else {
+      await run2(
+        'UPDATE user_settings SET on_track_threshold = $1, needs_improvement_threshold = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $3',
+        [onTrack, needsImprovement, req.user.id]
+      );
+    }
+    settings = await get2('SELECT * FROM user_settings WHERE user_id = $1', [req.user.id]);
+    res.json(settings);
+  } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});

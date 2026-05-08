@@ -45,6 +45,15 @@ export const api = {
   updateAttendance: (subjectId, body) => request('PUT', `/subjects/${subjectId}/attendance`, body),
   addAttendanceSession: (subjectId, body) => request('POST', `/subjects/${subjectId}/attendance/sessions`, body),
   deleteAttendanceSession: (id) => request('DELETE', `/attendance/sessions/${id}`),
+
+  // Grade Snapshots (Feature 1)
+  getSnapshots: (subjectId) => request('GET', `/subjects/${subjectId}/snapshots`),
+  createSnapshot: (subjectId, body) => request('POST', `/subjects/${subjectId}/snapshots`, body),
+  deleteSnapshot: (id) => request('DELETE', `/snapshots/${id}`),
+
+  // User Settings (Feature 5)
+  getSettings: () => request('GET', '/settings'),
+  updateSettings: (body) => request('PUT', '/settings', body),
 };
 
 // Grade calculation — now includes attendance if mode is with_grade
@@ -84,10 +93,62 @@ export const calculateGrade = (categories, attendance = null) => {
   return { grade: finalGrade, totalWeight };
 };
 
-export const getGradeStatus = (grade) => {
-  if (grade >= 85) return { label: 'On Track', color: '#10B981', bg: '#ECFDF5', emoji: '✅' };
-  if (grade >= 75) return { label: 'Needs Improvement', color: '#F59E0B', bg: '#FFFBEB', emoji: '⚠️' };
-  return { label: 'At Risk', color: '#EF4444', bg: '#FEF2F2', emoji: '🚨' };
+export const getGradeStatus = (grade, thresholds = null) => {
+  const onTrack = thresholds?.on_track_threshold ?? 85;
+  const needsImprovement = thresholds?.needs_improvement_threshold ?? 75;
+  if (grade >= onTrack) return { label: 'On Track', color: '#059669', bg: '#ECFDF5', emoji: '✅' };
+  if (grade >= needsImprovement) return { label: 'Needs Improvement', color: '#D97706', bg: '#FFFBEB', emoji: '⚠️' };
+  return { label: 'At Risk', color: '#DC2626', bg: '#FEF2F2', emoji: '🚨' };
+};
+
+// GPA conversion (Feature 2)
+export const gradeToGPA = (grade) => {
+  if (grade >= 97) return 4.0;
+  if (grade >= 93) return 4.0;
+  if (grade >= 90) return 3.7;
+  if (grade >= 87) return 3.3;
+  if (grade >= 83) return 3.0;
+  if (grade >= 80) return 2.7;
+  if (grade >= 77) return 2.3;
+  if (grade >= 73) return 2.0;
+  if (grade >= 70) return 1.7;
+  if (grade >= 67) return 1.3;
+  if (grade >= 65) return 1.0;
+  return 0.0;
+};
+
+// CSV Export (Feature 4)
+export const exportSubjectCSV = (subject, attendance = null) => {
+  const rows = [['Category', 'Weight (%)', 'Label', 'Date Taken', 'Score', 'Total', 'Percentage']];
+  for (const cat of subject.categories || []) {
+    for (const sc of cat.scores || []) {
+      rows.push([
+        cat.category_name,
+        cat.category_weight,
+        sc.label || '',
+        sc.date_taken || '',
+        sc.score_obtained,
+        sc.total_score,
+        ((sc.score_obtained / sc.total_score) * 100).toFixed(2) + '%',
+      ]);
+    }
+  }
+  if (attendance && attendance.sessions?.length) {
+    rows.push([]);
+    rows.push(['Attendance Sessions', '', '', '', '', '', '']);
+    rows.push(['Date', 'Status', 'Label', '', '', '', '']);
+    for (const s of attendance.sessions) {
+      rows.push([s.created_at?.split('T')[0] || '', s.status, s.label || '', '', '', '', '']);
+    }
+  }
+  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${subject.subject_name.replace(/[^a-z0-9]/gi, '_')}_grades.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 export const getTrend = (categories) => {

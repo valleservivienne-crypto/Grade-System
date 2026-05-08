@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, calculateGrade, getGradeStatus, getTrend, calculateWithExpected } from '../utils/api';
+import { api, calculateGrade, getGradeStatus, getTrend, calculateWithExpected, exportSubjectCSV } from '../utils/api';
 
 export default function SubjectDetail() {
   const { id } = useParams();
@@ -17,6 +17,7 @@ export default function SubjectDetail() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [attendance, setAttendance] = useState(null);
+  const [snapshots, setSnapshots] = useState([]);
   const [editingTotal, setEditingTotal] = useState(false);
   const [totalInput, setTotalInput] = useState('');
   const [weightInput, setWeightInput] = useState('');
@@ -51,7 +52,14 @@ export default function SubjectDetail() {
     }
   }, [id]);
 
-  useEffect(() => { load(); loadAttendance(); }, [load, loadAttendance]);
+  const loadSnapshots = useCallback(async () => {
+    try {
+      const data = await api.getSnapshots(id);
+      setSnapshots(data);
+    } catch (err) { console.error('Failed to load snapshots:', err); }
+  }, [id]);
+
+  useEffect(() => { load(); loadAttendance(); loadSnapshots(); }, [load, loadAttendance, loadSnapshots]);
 
   const gradeData = subject ? calculateGrade(subject.categories, attendance) : null;
   const status = gradeData ? getGradeStatus(gradeData.grade) : null;
@@ -197,6 +205,16 @@ export default function SubjectDetail() {
         </button>
         <div style={styles.navRight}>
           <span style={styles.navSemester}>{subject.semester || 'No semester'}</span>
+          <button onClick={() => exportSubjectCSV(subject, attendance)} style={{ ...styles.printBtn, background: '#059669', boxShadow: '0 4px 12px rgba(5,150,105,0.3)' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#047857'}
+            onMouseLeave={e => e.currentTarget.style.background = '#059669'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <polyline points="7 10 12 15 17 10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <line x1="12" y1="15" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            Export CSV
+          </button>
           <button onClick={handlePrint} style={styles.printBtn}
             onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
             onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
@@ -270,6 +288,15 @@ export default function SubjectDetail() {
                 ))}
               </div>
             )}
+
+            {/* Grade History Chart */}
+            <GradeHistorySection
+              snapshots={snapshots}
+              currentGrade={gradeData?.grade ?? null}
+              subjectId={id}
+              onSnapshotAdded={async () => { await loadSnapshots(); }}
+              onSnapshotDeleted={async () => { await loadSnapshots(); }}
+            />
 
             {/* Attendance Tracker */}
             <div style={{ marginTop: '28px' }}>
@@ -908,7 +935,7 @@ function CategoryModal({ category, usedWeight, onClose, onSave }) {
 }
 
 function ScoreModal({ score, onClose, onSave }) {
-  const [form, setForm] = useState({ score_obtained: score?.score_obtained ?? '', total_score: score?.total_score ?? '', label: score?.label || '' });
+  const [form, setForm] = useState({ score_obtained: score?.score_obtained ?? '', total_score: score?.total_score ?? '', label: score?.label || '', date_taken: score?.date_taken?.split('T')[0] || '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const handleSubmit = async (e) => {
@@ -919,7 +946,7 @@ function ScoreModal({ score, onClose, onSave }) {
     if (tot === 0) { setError('Total score must be greater than 0'); return; }
     if (obt > tot) { setError('Score obtained cannot exceed total score'); return; }
     setLoading(true);
-    try { await onSave({ score_obtained: obt, total_score: tot, label: form.label }); }
+    try { await onSave({ score_obtained: obt, total_score: tot, label: form.label, date_taken: form.date_taken || null }); }
     catch (err) { setError(err.message); } finally { setLoading(false); }
   };
   const pct = (form.score_obtained !== '' && form.total_score !== '' && parseFloat(form.total_score) > 0)
@@ -931,7 +958,10 @@ function ScoreModal({ score, onClose, onSave }) {
         {pct && <div style={{ textAlign: 'center', marginBottom: '12px' }}><span style={{ fontSize: '28px', fontWeight: '800', color: getGradeStatus(parseFloat(pct)).color, fontFamily: 'DM Mono, monospace' }}>{pct}%</span></div>}
         {error && <div style={mStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={mStyles.field}><label style={mStyles.label}>Label (optional)</label><input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Quiz 1..." style={mStyles.input} onFocus={e => e.target.style.borderColor = '#2563EB'} onBlur={e => e.target.style.borderColor = '#E2E8F8'} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={mStyles.field}><label style={mStyles.label}>Label (optional)</label><input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Quiz 1..." style={mStyles.input} onFocus={e => e.target.style.borderColor = '#2563EB'} onBlur={e => e.target.style.borderColor = '#E2E8F8'} /></div>
+            <div style={mStyles.field}><label style={mStyles.label}>Date Taken (optional)</label><input type="date" value={form.date_taken} onChange={e => setForm(f => ({ ...f, date_taken: e.target.value }))} style={mStyles.input} onFocus={e => e.target.style.borderColor = '#2563EB'} onBlur={e => e.target.style.borderColor = '#E2E8F8'} /></div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={mStyles.field}><label style={mStyles.label}>Score Obtained *</label><input type="number" min="0" step="0.01" value={form.score_obtained} onChange={e => setForm(f => ({ ...f, score_obtained: e.target.value }))} placeholder="e.g. 42" style={mStyles.input} onFocus={e => e.target.style.borderColor = '#2563EB'} onBlur={e => e.target.style.borderColor = '#E2E8F8'} /></div>
             <div style={mStyles.field}><label style={mStyles.label}>Total Score *</label><input type="number" min="0.01" step="0.01" value={form.total_score} onChange={e => setForm(f => ({ ...f, total_score: e.target.value }))} placeholder="e.g. 50" style={mStyles.input} onFocus={e => e.target.style.borderColor = '#2563EB'} onBlur={e => e.target.style.borderColor = '#E2E8F8'} /></div>
@@ -1004,6 +1034,156 @@ function LoadingState() {
 
 function ErrorState({ message, onBack }) {
   return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F0F4FF' }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: '40px', marginBottom: '16px' }}>😕</div><p style={{ color: '#64748B', marginBottom: '16px' }}>{message}</p><button onClick={onBack} style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer' }}>Back to Dashboard</button></div></div>;
+}
+
+
+// ─── Grade History Chart (Feature 1) ─────────────────────────────────────────
+function GradeHistorySection({ snapshots, currentGrade, subjectId, onSnapshotAdded, onSnapshotDeleted }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [label, setLabel] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saving, setSaving] = useState(false);
+
+  const allPoints = [
+    ...snapshots.map(s => ({ grade: s.grade, label: s.label || s.snapshot_date, date: s.snapshot_date, id: s.id, saved: true })),
+    ...(currentGrade !== null ? [{ grade: currentGrade, label: 'Current', date: 'now', id: null, saved: false }] : []),
+  ];
+
+  const handleSaveSnapshot = async () => {
+    if (currentGrade === null) return;
+    setSaving(true);
+    try {
+      await api.createSnapshot(subjectId, { grade: currentGrade, label: label || `Snapshot ${new Date(date).toLocaleDateString()}`, snapshot_date: date });
+      setShowAdd(false); setLabel(''); setDate(new Date().toISOString().split('T')[0]);
+      await onSnapshotAdded();
+    } catch (err) { console.error(err); } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    try { await api.deleteSnapshot(id); await onSnapshotDeleted(); } catch (err) { console.error(err); }
+  };
+
+  // Chart math
+  const min = allPoints.length ? Math.max(0, Math.min(...allPoints.map(p => p.grade)) - 10) : 0;
+  const max = allPoints.length ? Math.min(100, Math.max(...allPoints.map(p => p.grade)) + 10) : 100;
+  const W = 520, H = 160, PAD = { t: 16, r: 20, b: 32, l: 40 };
+  const cw = W - PAD.l - PAD.r, ch = H - PAD.t - PAD.b;
+
+  const toX = (i) => PAD.l + (i / Math.max(allPoints.length - 1, 1)) * cw;
+  const toY = (g) => PAD.t + ch - ((g - min) / (max - min)) * ch;
+
+  const pathD = allPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(p.grade).toFixed(1)}`).join(' ');
+  const areaD = allPoints.length > 1
+    ? `${pathD} L ${toX(allPoints.length - 1).toFixed(1)} ${(PAD.t + ch).toFixed(1)} L ${toX(0).toFixed(1)} ${(PAD.t + ch).toFixed(1)} Z`
+    : '';
+
+  const gridLines = [25, 50, 75, 100].filter(g => g >= min && g <= max);
+
+  return (
+    <div style={{ marginTop: '28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#0F172A', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ display: 'inline-flex', padding: '5px', background: '#EFF4FF', borderRadius: '7px', color: '#2563EB' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </span>
+          Grade History
+        </h2>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          disabled={currentGrade === null}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', background: currentGrade === null ? '#F1F5F9' : '#EFF4FF', color: currentGrade === null ? '#94A3B8' : '#2563EB', border: '1.5px solid ' + (currentGrade === null ? '#E2E8F0' : '#BFDBFE'), borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', cursor: currentGrade === null ? 'not-allowed' : 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'all 0.15s' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Save Current Grade
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{ background: '#F8FAFF', border: '1.5px solid #BFDBFE', borderRadius: '12px', padding: '16px', marginBottom: '14px', display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748B', display: 'block', marginBottom: '5px', letterSpacing: '0.3px' }}>LABEL (optional)</label>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. After Midterms" style={{ width: '100%', border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Plus Jakarta Sans, sans-serif', outline: 'none' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748B', display: 'block', marginBottom: '5px', letterSpacing: '0.3px' }}>DATE</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ border: '1.5px solid #E2E8F0', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', fontFamily: 'Plus Jakarta Sans, sans-serif', outline: 'none' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => setShowAdd(false)} style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #E2E8F0', background: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#374151' }}>Cancel</button>
+            <button onClick={handleSaveSnapshot} disabled={saving} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#2563EB', color: 'white', fontSize: '12px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Saving...' : `Save ${currentGrade?.toFixed(1)}%`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: 'white', borderRadius: '14px', border: '1px solid rgba(226,232,240,0.6)', padding: '20px', boxShadow: '0 1px 3px rgba(15,23,42,0.06)' }}>
+        {allPoints.length < 2 ? (
+          <div style={{ textAlign: 'center', padding: '32px 20px', color: '#94A3B8' }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: '10px' }}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <p style={{ fontSize: '13px', fontWeight: '500' }}>Save your current grade a few times to see a history chart.</p>
+            <p style={{ fontSize: '12px', marginTop: '4px' }}>
+              {currentGrade !== null ? `Current grade: ${currentGrade.toFixed(2)}%` : 'Add scores to get started'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
+              <defs>
+                <linearGradient id="gradeArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity="0.18"/>
+                  <stop offset="100%" stopColor="#2563EB" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              {/* Grid lines */}
+              {gridLines.map(g => (
+                <g key={g}>
+                  <line x1={PAD.l} y1={toY(g)} x2={PAD.l + cw} y2={toY(g)} stroke="#F1F5F9" strokeWidth="1"/>
+                  <text x={PAD.l - 6} y={toY(g) + 4} textAnchor="end" fontSize="9" fill="#94A3B8">{g}%</text>
+                </g>
+              ))}
+              {/* Area fill */}
+              {areaD && <path d={areaD} fill="url(#gradeArea)"/>}
+              {/* Line */}
+              <path d={pathD} fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              {/* Points */}
+              {allPoints.map((p, i) => {
+                const x = toX(i), y = toY(p.grade);
+                const isLast = !p.saved;
+                return (
+                  <g key={i}>
+                    <circle cx={x} cy={y} r={isLast ? 5 : 4} fill={isLast ? '#2563EB' : 'white'} stroke="#2563EB" strokeWidth="2"/>
+                    <text x={x} y={y - 9} textAnchor="middle" fontSize="9" fill="#2563EB" fontWeight="700">{p.grade.toFixed(1)}%</text>
+                    <text x={x} y={PAD.t + ch + 16} textAnchor="middle" fontSize="9" fill="#94A3B8">{p.label?.length > 10 ? p.label.slice(0,10)+'…' : p.label}</text>
+                  </g>
+                );
+              })}
+            </svg>
+            {/* Snapshot list */}
+            {snapshots.length > 0 && (
+              <div style={{ marginTop: '14px', borderTop: '1px solid #F1F5F9', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {snapshots.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: '8px', background: '#F8FAFC', fontSize: '12px' }}>
+                    <span style={{ fontWeight: '600', color: '#374151' }}>{s.label || s.snapshot_date}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '700', color: '#2563EB' }}>{parseFloat(s.grade).toFixed(2)}%</span>
+                      <span style={{ fontSize: '11px', color: '#94A3B8' }}>{s.snapshot_date}</span>
+                      <button onClick={() => handleDelete(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CBD5E1', display: 'flex', padding: '2px', borderRadius: '4px' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#CBD5E1'}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const styles = {

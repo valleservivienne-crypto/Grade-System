@@ -4,6 +4,29 @@ import { useAuth } from '../context/AuthContext';
 import { api, calculateGrade, getGradeStatus } from '../utils/api';
 import SubjectModal from '../components/SubjectModal';
 
+const Icons = {
+  Edit: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  ),
+  Trash: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/><path d="M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  ),
+  Layers: () => (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+      <polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+    </svg>
+  ),
+};
+
 const TUTORIAL_STEPS = [
   { icon: '', title: 'Welcome to GradeTrack!', description: 'GradeTrack helps you monitor your academic performance in real time. You can add subjects, set grading categories with weights, log your scores, and instantly see your standing — all in one place.', tip: ' This tutorial will walk you through everything. You can revisit it anytime.' },
   { icon: '', title: 'Step 1 — Add Your Subjects', description: 'Start by adding each subject you are enrolled in this semester. Click the "+ Add Subject" button at the top right of the dashboard. Fill in the subject name, your instructor\'s name, and the semester.', tip: ' You can add as many subjects as you need. Each subject is tracked independently.' },

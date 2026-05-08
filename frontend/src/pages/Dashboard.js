@@ -348,7 +348,7 @@ function SubjectCard({ subject, delay, onClick, onEdit, onDelete }) {
       {gradeData ? (
         <>
           <div style={styles.gradeRow}><span style={styles.gradeLabel}>Current Grade</span><span style={{ ...styles.gradeBadge, background: status.bg, color: status.color }}>{gradeData.grade.toFixed(2)}%</span></div>
-          <div style={{ ...styles.statusBadge, background: status.bg, color: status.color }}>{{status.label}</div>
+          <div style={{ ...styles.statusChip, background: status.bg, color: status.color }}><span style={{ width:'6px', height:'6px', borderRadius:'50%', background:status.color, flexShrink:0 }} />{status.label}</div>
           <ProgressBar value={gradeData.grade} color={status.color} />
         </>
       ) : <div style={styles.noGrade}>No scores yet — add categories &amp; scores</div>}

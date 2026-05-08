@@ -135,7 +135,7 @@ export default function SemesterSummary() {
     : null;
   const atRiskCount = withGrades.filter(s => s.status?.label === 'At Risk').length;
   const onTrackCount = withGrades.filter(s => s.status?.label === 'On Track').length;
-  const overallStatus = overallAvg !== null ? getGradeStatus(overallAvg, settings) : null;
+  const overallStatus = overallAvg !== null ? getGradeStatus(overallAvg) : null;
 
   const handleExportSummary = () => {
     const rows = [

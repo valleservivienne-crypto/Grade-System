@@ -225,6 +225,13 @@ export default function Dashboard() {
 
       <Toast toasts={toasts} />
 
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onSaved={() => api.getSettings().then(s => setUserSettings(s)).catch(() => {})}
+        />
+      )}
+
       {showModal && (
         <SubjectModal subject={editSubject}
           onClose={() => { setShowModal(false); setEditSubject(null); }}

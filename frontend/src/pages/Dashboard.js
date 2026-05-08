@@ -201,7 +201,7 @@ export default function Dashboard() {
         ) : (
           <div style={styles.grid}>
             {filteredSubjects.map((subject, i) => (
-              <SubjectCard key={subject.id} subject={subject} delay={i * 0.06} settings={userSettings}
+              <SubjectCard key={subject.id} subject={subject} delay={i * 0.06}
                 onClick={() => navigate(`/subject/${subject.id}`)}
                 onEdit={e => { e.stopPropagation(); setEditSubject(subject); setShowModal(true); }}
                 onDelete={e => { e.stopPropagation(); setDeleteConfirm(subject); }} />

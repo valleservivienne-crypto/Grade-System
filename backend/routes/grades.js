@@ -302,7 +302,6 @@ router.delete('/attendance/sessions/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // === GRADE SNAPSHOTS (Feature 1: Grade History) ===
 
@@ -391,3 +390,5 @@ router.put('/settings', async (req, res) => {
     res.json(settings);
   } catch (err) { res.status(500).json({ error: 'Server error' }); }
 });
+
+module.exports = router;

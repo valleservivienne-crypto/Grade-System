@@ -47,9 +47,6 @@ export const api = {
   deleteAttendanceSession: (id) => request('DELETE', `/attendance/sessions/${id}`),
 
 
-  // User Settings (Feature 5)
-  getSettings: () => request('GET', '/settings'),
-  updateSettings: (body) => request('PUT', '/settings', body),
 };
 
 // Grade calculation — now includes attendance if mode is with_grade
@@ -89,12 +86,16 @@ export const calculateGrade = (categories, attendance = null) => {
   return { grade: finalGrade, totalWeight };
 };
 
-export const getGradeStatus = (grade, thresholds = null) => {
-  const onTrack = thresholds?.on_track_threshold ?? 85;
-  const needsImprovement = thresholds?.needs_improvement_threshold ?? 75;
-  if (grade >= onTrack) return { label: 'On Track', color: '#059669', bg: '#ECFDF5', emoji: '✅' };
-  if (grade >= needsImprovement) return { label: 'Needs Improvement', color: '#D97706', bg: '#FFFBEB', emoji: '⚠️' };
-  return { label: 'At Risk', color: '#DC2626', bg: '#FEF2F2', emoji: '🚨' };
+export const getGradeStatus = (grade, passingGrade = 75) => {
+  // passingGrade = subject's passing_grade field (per-subject, set by prof)
+  // On Track: >= passing + 10 buffer
+  // Needs Improvement: >= passing but < passing + 10
+  // At Risk: < passing
+  const passing = typeof passingGrade === 'number' ? passingGrade : 75;
+  const onTrack = passing + 10;
+  if (grade >= onTrack) return { label: 'On Track', color: '#059669', bg: '#ECFDF5' };
+  if (grade >= passing) return { label: 'Needs Improvement', color: '#D97706', bg: '#FFFBEB' };
+  return { label: 'At Risk', color: '#DC2626', bg: '#FEF2F2' };
 };
 
 // GPA conversion (Feature 2)

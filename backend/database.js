@@ -60,6 +60,9 @@ const initDB = async () => {
     await client.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'unset'`);
     await client.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS attendance_weight REAL NOT NULL DEFAULT 0`);
 
+    // Passing grade per subject
+    await client.query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS passing_grade REAL NOT NULL DEFAULT 75`);
+
     // Feature 3: date_taken field on scores
     await client.query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS date_taken DATE`);
 

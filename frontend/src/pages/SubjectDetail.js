@@ -54,7 +54,8 @@ export default function SubjectDetail() {
   useEffect(() => { load(); loadAttendance(); }, [load, loadAttendance]);
 
   const gradeData = subject ? calculateGrade(subject.categories, attendance) : null;
-  const status = gradeData ? getGradeStatus(gradeData.grade) : null;
+  const passingGrade = subject?.passing_grade ?? 75;
+  const status = gradeData ? getGradeStatus(gradeData.grade, passingGrade) : null;
   const trend = subject ? getTrend(subject.categories) : null;
   const totalWeight = subject ? (subject.categories || []).reduce((s, c) => s + c.category_weight, 0) : 0;
   const attendanceWeight = (attendance?.mode === 'with_grade' && attendance?.attendance_weight) ? parseFloat(attendance.attendance_weight) : 0;
@@ -163,6 +164,7 @@ export default function SubjectDetail() {
         @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         @keyframes unlockPulse { 0% { transform:scale(1); } 50% { transform:scale(1.02); } 100% { transform:scale(1); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes attendanceFadeIn { from { opacity:0; transform:scale(0.97) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
         @keyframes attendanceUnlock { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         @media print { body { margin: 0; } }
@@ -179,7 +181,12 @@ export default function SubjectDetail() {
             boxShadow: '0 4px 20px rgba(15,23,42,0.12)', display: 'flex', alignItems: 'center', gap: '8px',
             animation: 'slideIn 0.3s ease', minWidth: '220px',
           }}>
-            <span style={{ fontSize: '16px' }}>{t.type === 'success' ? '✅' : '❌'}</span>
+            <span style={{ display:'flex', flexShrink:0 }}>
+              {t.type === 'success'
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              }
+            </span>
             {t.message}
           </div>
         ))}
@@ -216,7 +223,12 @@ export default function SubjectDetail() {
             <div style={styles.heroInitial}>{subject.subject_name[0]}</div>
             <div>
               <h1 style={styles.heroTitle}>{subject.subject_name}</h1>
-              {subject.instructor_name && <p style={styles.heroSub}>👤 {subject.instructor_name}</p>}
+              {subject.instructor_name && (
+                <p style={styles.heroSub}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',marginRight:'5px',verticalAlign:'middle'}}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  {subject.instructor_name}
+                </p>
+              )}
             </div>
           </div>
           {gradeData && status && (
@@ -224,7 +236,7 @@ export default function SubjectDetail() {
               <div style={{ ...styles.gradeCircle, borderColor: status.color }}>
                 <span style={{ ...styles.gradeNum, color: status.color }}>{gradeData.grade.toFixed(1)}%</span>
               </div>
-              <div style={{ ...styles.statusPill, background: status.bg, color: status.color }}>{status.emoji} {status.label}</div>
+              <div style={{ ...styles.statusPill, background: status.bg, color: status.color, display:"flex", alignItems:"center", gap:"5px" }}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:status.color,flexShrink:0}} />{status.label}</div>
             </div>
           )}
         </div>
@@ -237,7 +249,7 @@ export default function SubjectDetail() {
 
         {totalUsedWeight < 100 && subject.categories?.length > 0 && (
           <div style={styles.weightWarning} className="animate-in">
-            ⚠️ Total category weights: <strong>{totalUsedWeight.toFixed(1)}%</strong> — must reach 100% for final grade accuracy
+Total category weights: <strong>{totalUsedWeight.toFixed(1)}%</strong> — must reach 100% for final grade accuracy
           </div>
         )}
 
@@ -256,11 +268,11 @@ export default function SubjectDetail() {
             {subject.categories?.length > 0 && <WeightBar categories={subject.categories} attendanceWeight={attendanceWeight} />}
 
             {(!subject.categories || subject.categories.length === 0) ? (
-              <EmptyBox icon="📋" text="No categories yet. Add your first grading category." />
+    <EmptyBox text="No categories yet — click Add Category to get started." />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {subject.categories.map((cat, i) => (
-                  <CategoryCard key={cat.id} category={cat} delay={i * 0.05}
+                  <CategoryCard key={cat.id} category={cat} delay={i * 0.05} passingGrade={passingGrade}
                     onAddScore={() => { setShowScoreModal(cat.id); setEditScore(null); }}
                     onEditCat={() => { setEditCat(cat); setShowCatModal(true); }}
                     onDeleteCat={() => setDeleteConfirm({ type: 'category', item: cat })}
@@ -274,7 +286,10 @@ export default function SubjectDetail() {
             {/* Attendance Tracker */}
             <div style={{ marginTop: '28px' }}>
               <div style={styles.sectionHeader}>
-                <h2 style={styles.sectionTitle}>📅 Attendance Tracker</h2>
+                <h2 style={styles.sectionTitle}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline',marginRight:'6px',verticalAlign:'middle'}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Attendance Tracker
+              </h2>
                 {attendance?.mode !== 'unset' && (
                   <button onClick={handleResetMode} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#94A3B8', textDecoration: 'underline' }}>
                     Change setting
@@ -325,7 +340,7 @@ export default function SubjectDetail() {
                 })}
                 {attendance?.mode === 'with_grade' && attendanceStats && attendanceStats.total > 0 && (
                   <div style={{ ...styles.breakdownRow, background: '#EFF4FF', borderRadius: '6px', padding: '6px 8px' }}>
-                    <div style={{ ...styles.breakdownName, color: '#2563EB' }}>📅 Attendance</div>
+<div style={{ ...styles.breakdownName, color: '#2563EB' }}>Attendance</div>
                     <div style={styles.breakdownStats}>
                       <span style={styles.mono}>{attendanceStats.percentage.toFixed(1)}%</span>
                       <span style={styles.breakdownWeight}>× {attendanceWeight}%</span>
@@ -342,7 +357,7 @@ export default function SubjectDetail() {
 
             {/* Target Grade Planner */}
             <div style={styles.plannerCard} className="animate-in">
-              <h3 style={styles.cardTitle}>🎯 Target Grade Planner</h3>
+<h3 style={styles.cardTitle}>Target Grade Planner</h3>
               <p style={styles.plannerDesc}>Add expected upcoming scores to see if you can hit your target</p>
               <div style={styles.plannerInput}>
                 <input type="number" min="0" max="100" value={targetGrade}
@@ -360,13 +375,13 @@ export default function SubjectDetail() {
                 <div style={{ ...styles.plannerResult, marginTop: '12px', background: plannerResult.status === 'achieved' ? '#ECFDF5' : '#EFF4FF', borderColor: plannerResult.status === 'achieved' ? '#A7F3D0' : '#BFDBFE' }} className="animate-in">
                   {plannerResult.status === 'achieved' ? (
                     <>
-                      <div style={{ fontSize: '24px', marginBottom: '6px' }}>🎉</div>
+    
                       <div style={{ fontWeight: '700', color: '#065F46', fontSize: '15px' }}>Target Achievable!</div>
                       <div style={{ fontSize: '13px', color: '#047857', marginTop: '4px' }}>Projected grade: <strong>{plannerResult.projectedGrade.toFixed(2)}%</strong> ≥ {targetGrade}%</div>
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize: '24px', marginBottom: '6px' }}>📊</div>
+    
                       <div style={{ fontWeight: '700', color: '#1E40AF', fontSize: '15px' }}>Projected Grade</div>
                       <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563EB', margin: '4px 0' }}>{plannerResult.projectedGrade.toFixed(2)}%</div>
                       <div style={{ fontSize: '13px', color: '#1D4ED8' }}>Still need <strong>{plannerResult.gap.toFixed(2)}%</strong> more to reach {targetGrade}%.</div>
@@ -477,7 +492,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
             </div>
             <div style={{ background: '#E8EDF5', borderRadius: '8px', height: '6px', marginBottom: '14px' }} />
             <div style={{ display: 'flex', gap: '8px' }}>
-              {['✅ Present','⏰ Late','❌ Absent'].map(l => (
+              {['Present','Late','Absent'].map(l => (
                 <div key={l} style={{ flex: 1, background: '#F0F4FA', borderRadius: '8px', padding: '9px', textAlign: 'center', fontSize: '12px', color: '#C8D1E0', fontWeight: '600' }}>{l}</div>
               ))}
             </div>
@@ -514,7 +529,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
                 fontSize: '26px',
                 margin: '0 auto 16px',
                 boxShadow: '0 4px 20px rgba(37,99,235,0.15)',
-              }}>📅</div>
+              }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
 
               <h3 style={{
                 fontSize: '16px', fontWeight: '800', color: '#0F172A',
@@ -553,8 +568,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,99,235,0.35)';
                   }}>
-                  <span style={{ fontSize: '15px' }}>✅</span>
-                  Yes — Include in Grade Calculation
+Yes — Include in Grade Calculation
                 </button>
 
                 <button
@@ -581,8 +595,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = '0 1px 4px rgba(15,23,42,0.06)';
                   }}>
-                  <span style={{ fontSize: '15px' }}>📊</span>
-                  No — Just Track My Attendance
+No — Just Track My Attendance
                 </button>
               </div>
 
@@ -605,7 +618,7 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
           <div style={{ padding: '10px 20px', background: isWithGrade ? '#EFF4FF' : '#F8FAFC', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '12px', fontWeight: '700', color: isWithGrade ? '#2563EB' : '#64748B' }}>
-                {isWithGrade ? '📊 Included in Grade Calculation' : '👁️ Tracking Only (not in grade)'}
+                {isWithGrade ? 'Included in Grade Calculation' : 'Tracking Only (not in grade)'}
               </span>
             </div>
             {isWithGrade && (
@@ -617,12 +630,14 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
                       style={{ width: '50px', border: '1.5px solid #2563EB', borderRadius: '4px', padding: '1px 4px', fontSize: '12px', outline: 'none' }} autoFocus />
                     <span style={{ fontSize: '11px' }}>%</span>
                     <button onClick={onSaveWeight} style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer' }}>Save</button>
-                    <button onClick={() => setEditingWeight(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer' }}>✕</button>
+<button onClick={() => setEditingWeight(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight:'600', color:'#64748B' }}>Cancel</button>
                   </span>
                 ) : (
                   <span style={{ fontWeight: '700', color: '#2563EB' }}>
                     {attendance.attendance_weight}%
-                    <button onClick={() => setEditingWeight(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#94A3B8', marginLeft: '4px' }}>✏️</button>
+                    <button onClick={() => setEditingWeight(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', marginLeft: '4px', display:'inline-flex', padding:'2px' }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
                   </span>
                 )}
               </div>
@@ -643,13 +658,15 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
               ) : (
                 <span style={{ marginLeft: '6px', fontWeight: '700', color: '#0F172A' }}>
                   {attendance.total_classes || 'Not set'}
-                  <button onClick={() => setEditingTotal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '6px', fontSize: '12px', color: '#94A3B8' }}>✏️</button>
+                  <button onClick={() => setEditingTotal(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '6px', color: '#94A3B8', display:'inline-flex', padding:'2px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
                 </span>
               )}
             </div>
             {stats && stats.total > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {stats.isMaxed && <span style={{ fontSize: '11px', background: '#FEF2F2', color: '#991B1B', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>All sessions recorded ✓</span>}
+                {stats.isMaxed && <span style={{ fontSize: '11px', background: '#FEF2F2', color: '#991B1B', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>All sessions recorded</span>}
                 <div style={{ background: pctBg, color: pctColor, padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
                   {stats.percentage.toFixed(1)}% attendance
                 </div>
@@ -692,9 +709,9 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
           <div style={{ padding: '16px 20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {['present', 'late', 'absent'].map(s => {
               const config = {
-                present: { label: '✅ Present', bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0', hoverBg: '#D1FAE5' },
-                late: { label: '⏰ Late', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A', hoverBg: '#FEF3C7' },
-                absent: { label: '❌ Absent', bg: '#FEF2F2', color: '#991B1B', border: '#FECACA', hoverBg: '#FEE2E2' },
+                present: { label: 'Present', bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0', hoverBg: '#D1FAE5' },
+                late: { label: 'Late', bg: '#FFFBEB', color: '#92400E', border: '#FDE68A', hoverBg: '#FEF3C7' },
+                absent: { label: 'Absent', bg: '#FEF2F2', color: '#991B1B', border: '#FECACA', hoverBg: '#FEE2E2' },
               }[s];
               const disabled = stats?.isMaxed;
               return (
@@ -713,20 +730,24 @@ function AttendanceTracker({ attendance, stats, editingTotal, totalInput, setTot
             <div style={{ borderTop: '1px solid #F1F5F9' }}>
               <button onClick={() => setShowSessions(s => !s)} style={{ width: '100%', background: 'none', border: 'none', padding: '12px 20px', cursor: 'pointer', fontSize: '12px', color: '#64748B', fontWeight: '600', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Session History ({stats.sessions.length} sessions)</span>
-                <span>{showSessions ? '▲' : '▼'}</span>
+                <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{transform: showSessions ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}><polyline points='6 9 12 15 18 9'/></svg>
               </button>
               {showSessions && (
                 <div style={{ padding: '0 20px 16px', maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {[...stats.sessions].reverse().map((session, i) => (
                     <div key={session.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>{session.status === 'present' ? '✅' : session.status === 'late' ? '⏰' : '❌'}</span>
+                        <span style={{display:'inline-flex',width:'18px',height:'18px',borderRadius:'4px',alignItems:'center',justifyContent:'center',background:session.status==='present'?'#ECFDF5':session.status==='late'?'#FFFBEB':'#FEF2F2',color:session.status==='present'?'#059669':session.status==='late'?'#D97706':'#DC2626',flexShrink:0}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            {session.status==='present'?<polyline points="20 6 9 17 4 12"/>:session.status==='late'?<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>:<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>}
+                          </svg>
+                        </span>
                         <span style={{ fontWeight: '600', color: session.status === 'present' ? '#065F46' : session.status === 'late' ? '#92400E' : '#991B1B', textTransform: 'capitalize' }}>{session.status}</span>
                         <span style={{ color: '#94A3B8' }}>Session {stats.sessions.length - i}</span>
                       </div>
                       <button onClick={() => onDeleteSession(session.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '12px', padding: '2px 4px', borderRadius: '4px' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>✕</button>
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}><svg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg></button>
                     </div>
                   ))}
                 </div>
@@ -749,14 +770,14 @@ function generatePrintHTML(subject, gradeData, status, attendance, attendanceSta
     const weighted = avg !== null ? avg * (cat.category_weight / 100) : 0;
     const scoresHTML = scores.map(sc => {
       const pct = (sc.score_obtained / sc.total_score) * 100;
-      return `<tr><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;">${sc.label || '—'}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.score_obtained}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.total_score}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${pct>=85?'#10B981':pct>=75?'#F59E0B':'#EF4444'}">${pct.toFixed(1)}%</td></tr>`;
+      return `<tr><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;">${sc.label || '—'}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.score_obtained}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;">${sc.total_score}</td><td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${pct>=(pg+10)?'#10B981':pct>=pg?'#F59E0B':'#EF4444'}">${pct.toFixed(1)}%</td></tr>`;
     }).join('');
-    return `<div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"><div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;"><div><span style="font-weight:700;">${cat.category_name}</span><span style="margin-left:10px;color:#64748b;font-size:13px;">Weight: ${cat.category_weight}%</span></div>${avg !== null ? `<div style="font-weight:800;color:${avg>=85?'#10B981':avg>=75?'#F59E0B':'#EF4444'}">${avg.toFixed(1)}% → ${weighted.toFixed(2)} pts</div>` : ''}</div>${scores.length > 0 ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;color:#64748b;font-size:11px;">Label</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Obtained</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Total</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">%</th></tr></thead><tbody>${scoresHTML}</tbody></table>` : '<div style="padding:12px 14px;color:#94a3b8;font-size:13px;font-style:italic;">No scores recorded</div>'}</div>`;
+    return `<div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"><div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;"><div><span style="font-weight:700;">${cat.category_name}</span><span style="margin-left:10px;color:#64748b;font-size:13px;">Weight: ${cat.category_weight}%</span></div>${avg !== null ? `<div style="font-weight:800;color:${avg>=(pg+10)?'#10B981':avg>=pg?'#F59E0B':'#EF4444'}">${avg.toFixed(1)}% → ${weighted.toFixed(2)} pts</div>` : ''}</div>${scores.length > 0 ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;color:#64748b;font-size:11px;">Label</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Obtained</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">Total</th><th style="padding:8px 10px;text-align:center;color:#64748b;font-size:11px;">%</th></tr></thead><tbody>${scoresHTML}</tbody></table>` : '<div style="padding:12px 14px;color:#94a3b8;font-size:13px;font-style:italic;">No scores recorded</div>'}</div>`;
   }).join('');
-  const gradeColor = gradeData ? (gradeData.grade >= 85 ? '#10B981' : gradeData.grade >= 75 ? '#F59E0B' : '#EF4444') : '#94A3B8';
-  const gradeLabel = gradeData ? (gradeData.grade >= 85 ? '✅ On Track' : gradeData.grade >= 75 ? '⚠️ Needs Improvement' : '🚨 At Risk') : 'No grade yet';
-  const attendanceHTML = attendanceStats && attendanceStats.total > 0 ? `<div style="margin-top:24px;border:1px solid #e2e8f0;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;">📅 Attendance Summary ${attendance?.mode === 'with_grade' ? `(${attendance.attendance_weight}% weight)` : '(Tracking only)'}</h2><div style="display:flex;gap:20px;"><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#10B981;">${attendanceStats.present}</div><div style="font-size:11px;color:#64748b;">Present</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#F59E0B;">${attendanceStats.late}</div><div style="font-size:11px;color:#64748b;">Late</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#EF4444;">${attendanceStats.absent}</div><div style="font-size:11px;color:#64748b;">Absent</div></div><div style="text-align:center;margin-left:auto;"><div style="font-size:20px;font-weight:800;color:${attendanceStats.percentage>=75?'#10B981':attendanceStats.percentage>=50?'#F59E0B':'#EF4444'};">${attendanceStats.percentage.toFixed(1)}%</div><div style="font-size:11px;color:#64748b;">${attendanceStats.attended}/${attendanceStats.total}</div></div></div></div>` : '';
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grade Report - ${subject.subject_name}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;color:#0f172a;padding:32px;background:white;font-size:14px;}</style></head><body><div style="border-bottom:3px solid #2563EB;padding-bottom:20px;margin-bottom:24px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📊 GradeTrack — Grade Report</div><h1 style="font-size:26px;font-weight:800;">${subject.subject_name}</h1>${subject.instructor_name ? `<div style="color:#64748b;margin-top:4px;">👤 ${subject.instructor_name}</div>` : ''}${subject.semester ? `<div style="color:#64748b;">📅 ${subject.semester}</div>` : ''}</div>${gradeData ? `<div style="text-align:center;"><div style="font-size:36px;font-weight:800;color:${gradeColor};">${gradeData.grade.toFixed(2)}%</div><div style="font-size:13px;font-weight:600;color:${gradeColor};">${gradeLabel}</div></div>` : ''}</div><div style="margin-top:10px;font-size:12px;color:#94a3b8;">Generated: ${new Date().toLocaleString()}</div></div><h2 style="font-size:16px;font-weight:700;margin-bottom:14px;">Grade Categories & Scores</h2>${categoriesHTML}${gradeData ? `<div style="margin-top:24px;border:2px solid #2563EB;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#2563EB;">Final Grade Summary</h2>${cats.filter(c=>c.scores?.length>0).map(cat=>{const s=cat.scores.reduce((a,sc)=>a+sc.score_obtained,0);const t=cat.scores.reduce((a,sc)=>a+sc.total_score,0);const a=t>0?(s/t)*100:0;const w=a*(cat.category_weight/100);return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>${cat.category_name}</span><span>${a.toFixed(1)}% × ${cat.category_weight}% = <strong style="color:#2563EB;">${w.toFixed(2)}</strong></span></div>`;}).join('')}${attendance?.mode==='with_grade'&&attendanceStats?.total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>📅 Attendance</span><span>${attendanceStats.percentage.toFixed(1)}% × ${attendance.attendance_weight}% = <strong style="color:#2563EB;">${(attendanceStats.percentage*attendance.attendance_weight/100).toFixed(2)}</strong></span></div>`:''}<div style="display:flex;justify-content:space-between;padding-top:12px;font-size:18px;font-weight:800;"><span>Final Grade</span><span style="color:${gradeColor};">${gradeData.grade.toFixed(2)}%</span></div></div>` : ''}${attendanceHTML}</body></html>`;
+
+  const gradeLabel = gradeData ? (gradeData.grade >= 85 ? 'On Track' : gradeData.grade >= 75 ? 'Needs Improvement' : 'At Risk') : 'No grade yet';
+  const attendanceHTML = attendanceStats && attendanceStats.total > 0 ? `<div style="margin-top:24px;border:1px solid #e2e8f0;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;">Attendance Summary ${attendance?.mode === 'with_grade' ? `(${attendance.attendance_weight}% weight)` : '(Tracking only)'}</h2><div style="display:flex;gap:20px;"><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#10B981;">${attendanceStats.present}</div><div style="font-size:11px;color:#64748b;">Present</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#F59E0B;">${attendanceStats.late}</div><div style="font-size:11px;color:#64748b;">Late</div></div><div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:#EF4444;">${attendanceStats.absent}</div><div style="font-size:11px;color:#64748b;">Absent</div></div><div style="text-align:center;margin-left:auto;"><div style="font-size:20px;font-weight:800;color:${attendanceStats.percentage>=75?'#10B981':attendanceStats.percentage>=50?'#F59E0B':'#EF4444'};">${attendanceStats.percentage.toFixed(1)}%</div><div style="font-size:11px;color:#64748b;">${attendanceStats.attended}/${attendanceStats.total}</div></div></div></div>` : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grade Report - ${subject.subject_name}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;color:#0f172a;padding:32px;background:white;font-size:14px;}</style></head><body><div style="border-bottom:3px solid #2563EB;padding-bottom:20px;margin-bottom:24px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">GradeTrack — Grade Report</div><h1 style="font-size:26px;font-weight:800;">${subject.subject_name}</h1>${subject.instructor_name ? `<div style="color:#64748b;margin-top:4px;">${subject.instructor_name}</div>` : ''}${subject.semester ? `<div style="color:#64748b;">${subject.semester}</div>` : ''}</div>${gradeData ? `<div style="text-align:center;"><div style="font-size:36px;font-weight:800;color:${gradeColor};">${gradeData.grade.toFixed(2)}%</div><div style="font-size:13px;font-weight:600;color:${gradeColor};">${gradeLabel}</div></div>` : ''}</div><div style="margin-top:10px;font-size:12px;color:#94a3b8;">Generated: ${new Date().toLocaleString()}</div></div><h2 style="font-size:16px;font-weight:700;margin-bottom:14px;">Grade Categories & Scores</h2>${categoriesHTML}${gradeData ? `<div style="margin-top:24px;border:2px solid #2563EB;border-radius:8px;padding:16px;"><h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#2563EB;">Final Grade Summary</h2>${cats.filter(c=>c.scores?.length>0).map(cat=>{const s=cat.scores.reduce((a,sc)=>a+sc.score_obtained,0);const t=cat.scores.reduce((a,sc)=>a+sc.total_score,0);const a=t>0?(s/t)*100:0;const w=a*(cat.category_weight/100);return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>${cat.category_name}</span><span>${a.toFixed(1)}% × ${cat.category_weight}% = <strong style="color:#2563EB;">${w.toFixed(2)}</strong></span></div>`;}).join('')}${attendance?.mode==='with_grade'&&attendanceStats?.total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px;"><span>Attendance</span><span>${attendanceStats.percentage.toFixed(1)}% × ${attendance.attendance_weight}% = <strong style="color:#2563EB;">${(attendanceStats.percentage*attendance.attendance_weight/100).toFixed(2)}</strong></span></div>`:''}<div style="display:flex;justify-content:space-between;padding-top:12px;font-size:18px;font-weight:800;"><span>Final Grade</span><span style="color:${gradeColor};">${gradeData.grade.toFixed(2)}%</span></div></div>` : ''}${attendanceHTML}</body></html>`;
 }
 
 function WeightBar({ categories, attendanceWeight }) {
@@ -787,18 +808,18 @@ function WeightBar({ categories, attendanceWeight }) {
   );
 }
 
-function CategoryCard({ category, delay, onAddScore, onEditCat, onDeleteCat, onEditScore, onDeleteScore }) {
+function CategoryCard({ category, delay, onAddScore, onEditCat, onDeleteCat, onEditScore, onDeleteScore, passingGrade = 75 }) {
   const [expanded, setExpanded] = useState(true);
   const scores = category.scores || [];
   const sumObt = scores.reduce((s, sc) => s + sc.score_obtained, 0);
   const sumTot = scores.reduce((s, sc) => s + sc.total_score, 0);
   const avg = sumTot > 0 ? (sumObt / sumTot) * 100 : null;
-  const status = avg !== null ? getGradeStatus(avg) : null;
+  const status = avg !== null ? getGradeStatus(avg, passingGrade) : null;
   return (
     <div style={{ ...styles.catCard, animationDelay: `${delay}s` }} className="animate-in">
       <div style={styles.catHeader} onClick={() => setExpanded(e => !e)}>
         <div style={styles.catLeft}>
-          <span style={styles.expandIcon}>{expanded ? '▼' : '▶'}</span>
+          <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='#94A3B8' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round' style={{transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition:'transform 0.2s', flexShrink:0, marginRight:'2px'}}><polyline points='9 18 15 12 9 6'/></svg>
           <div>
             <div style={styles.catName}>{category.category_name}</div>
             <div style={styles.catWeight}>Weight: {category.category_weight}%</div>
@@ -819,7 +840,7 @@ function CategoryCard({ category, delay, onAddScore, onEditCat, onDeleteCat, onE
               <tbody>
                 {scores.map(sc => {
                   const pct = (sc.score_obtained / sc.total_score) * 100;
-                  const st = getGradeStatus(pct);
+                  const st = getGradeStatus(pct, passingGrade);
                   return (
                     <tr key={sc.id} style={styles.tr} onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       <td style={styles.td}>{sc.label || <span style={{color:'#CBD5E1'}}>—</span>}</td>
@@ -864,10 +885,10 @@ function QuickStat({ label, value }) {
   );
 }
 
-function EmptyBox({ icon, text }) {
+function EmptyBox({ text }) {
   return (
     <div style={{ textAlign: 'center', padding: '40px 20px', background: '#F8FAFC', borderRadius: '10px', border: '2px dashed #E2E8F0' }}>
-      <div style={{ fontSize: '32px', marginBottom: '8px' }}>{icon}</div>
+      <svg width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='#CBD5E1' strokeWidth='1.5' strokeLinecap='round' style={{marginBottom:'10px'}}><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M16 3v4M8 3v4M3 9h18'/><line x1='8' y1='13' x2='16' y2='13'/><line x1='8' y1='17' x2='12' y2='17'/></svg>
       <div style={{ fontSize: '13px', color: '#94A3B8' }}>{text}</div>
     </div>
   );
@@ -891,7 +912,7 @@ function CategoryModal({ category, usedWeight, onClose, onSave }) {
   return (
     <div style={mStyles.overlay} onClick={onClose}>
       <div style={mStyles.modal} onClick={e => e.stopPropagation()} className="animate-scale">
-        <div style={mStyles.header}><h2 style={mStyles.title}>{category ? 'Edit Category' : 'Add Category'}</h2><button onClick={onClose} style={mStyles.close}>✕</button></div>
+        <div style={mStyles.header}><h2 style={mStyles.title}>{category ? 'Edit Category' : 'Add Category'}</h2><button onClick={onClose} style={mStyles.close}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div style={mStyles.hint}>Available weight: <strong>{available}%</strong></div>
         {error && <div style={mStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -927,7 +948,7 @@ function ScoreModal({ score, onClose, onSave }) {
   return (
     <div style={mStyles.overlay} onClick={onClose}>
       <div style={mStyles.modal} onClick={e => e.stopPropagation()} className="animate-scale">
-        <div style={mStyles.header}><h2 style={mStyles.title}>{score ? 'Edit Score' : 'Add Score'}</h2><button onClick={onClose} style={mStyles.close}>✕</button></div>
+        <div style={mStyles.header}><h2 style={mStyles.title}>{score ? 'Edit Score' : 'Add Score'}</h2><button onClick={onClose} style={mStyles.close}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         {pct && <div style={{ textAlign: 'center', marginBottom: '12px' }}><span style={{ fontSize: '28px', fontWeight: '800', color: getGradeStatus(parseFloat(pct)).color, fontFamily: 'DM Mono, monospace' }}>{pct}%</span></div>}
         {error && <div style={mStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -953,7 +974,7 @@ function ConfirmDeleteModal({ name, onConfirm, onClose }) {
   return (
     <div style={mStyles.overlay} onClick={onClose}>
       <div style={{ ...mStyles.modal, maxWidth: '400px' }} onClick={e => e.stopPropagation()} className="animate-scale">
-        <div style={{ fontSize: '36px', textAlign: 'center', marginBottom: '12px' }}>⚠️</div>
+<div style={{ display:'flex', justifyContent:'center', marginBottom:'14px' }}><svg width='36' height='36' viewBox='0 0 24 24' fill='none' stroke='#EF4444' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg></div>
         <h3 style={{ fontSize: '17px', fontWeight: '700', textAlign: 'center', marginBottom: '8px' }}>Confirm Delete</h3>
         <p style={{ fontSize: '13px', color: '#64748B', textAlign: 'center', marginBottom: '24px' }}>Delete {name}? This cannot be undone.</p>
         <div style={mStyles.actions}>
@@ -993,7 +1014,7 @@ function ExpectedScoreRow({ category, expected, onChange }) {
             <span style={{ fontSize: '12px', color: '#94A3B8' }}>/</span>
             <input type="number" placeholder="Total" value={row.total_score} onChange={e => updateRow(i, 'total_score', parseFloat(e.target.value) || '')} style={{ width: '70px', border: '1.5px solid #E2E8F8', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', outline: 'none', background: 'white' }} />
             {pct && <span style={{ fontSize: '12px', fontWeight: '700', color: parseFloat(pct) >= 75 ? '#10B981' : '#EF4444', minWidth: '42px' }}>{pct}%</span>}
-            <button onClick={() => removeRow(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '14px', padding: '2px 4px', marginLeft: 'auto' }}>✕</button>
+            <button onClick={() => removeRow(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '14px', padding: '2px 4px', marginLeft: 'auto' }}><svg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg></button>
           </div>
         );
       })}
@@ -1002,11 +1023,11 @@ function ExpectedScoreRow({ category, expected, onChange }) {
 }
 
 function LoadingState() {
-  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F0F4FF' }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: '40px', marginBottom: '16px' }}>⏳</div><p style={{ color: '#64748B' }}>Loading subject...</p></div></div>;
+  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F0F4FF' }}><div style={{ textAlign: 'center' }}><svg width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='#94A3B8' strokeWidth='1.5' strokeLinecap='round' style={{marginBottom:'14px',animation:'spin 1.2s linear infinite'}}><circle cx='12' cy='12' r='10' opacity='0.25'/><path d='M12 2a10 10 0 0 1 10 10'/></svg><p style={{ color: '#64748B', fontSize:'14px' }}>Loading subject...</p></div></div>;
 }
 
 function ErrorState({ message, onBack }) {
-  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F0F4FF' }}><div style={{ textAlign: 'center' }}><div style={{ fontSize: '40px', marginBottom: '16px' }}>😕</div><p style={{ color: '#64748B', marginBottom: '16px' }}>{message}</p><button onClick={onBack} style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer' }}>Back to Dashboard</button></div></div>;
+  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#F0F4FF' }}><div style={{ textAlign: 'center' }}><svg width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='#94A3B8' strokeWidth='1.5' strokeLinecap='round' style={{marginBottom:'14px'}}><circle cx='12' cy='12' r='10'/><path d='M16 16s-1.5-2-4-2-4 2-4 2'/><line x1='9' y1='9' x2='9.01' y2='9'/><line x1='15' y1='9' x2='15.01' y2='9'/></svg><p style={{ color: '#64748B', marginBottom: '16px' }}>{message}</p><button onClick={onBack} style={{ background: '#2563EB', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer' }}>Back to Dashboard</button></div></div>;
 }
 
 

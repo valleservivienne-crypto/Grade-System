@@ -94,7 +94,6 @@ export default function SemesterSummary() {
   const navigate = useNavigate();
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState(null);
   const [showGPAScale, setShowGPAScale] = useState(false);
 
   const load = useCallback(async () => {
@@ -104,8 +103,7 @@ export default function SemesterSummary() {
       const attendances = await Promise.all(full.map(s => api.getAttendance(s.id).catch(() => null)));
       const withAttendance = full.map((s, i) => ({ ...s, attendance: attendances[i] }));
       setSubjects(withAttendance);
-      const userSettings = await api.getSettings().catch(() => null);
-      setSettings(userSettings);
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -119,7 +117,7 @@ export default function SemesterSummary() {
   const subjectGrades = subjects.map(s => {
     const gd = calculateGrade(s.categories, s.attendance);
     const grade = gd?.grade ?? null;
-    const status = grade !== null ? getGradeStatus(grade, settings) : null;
+    const status = grade !== null ? getGradeStatus(grade, s.passing_grade ?? 75) : null;
     const gpa = grade !== null ? gradeToGPA(grade) : null;
     const letter = grade !== null ? getLetterGrade(grade) : null;
     return { ...s, grade, status, gpa, letter };

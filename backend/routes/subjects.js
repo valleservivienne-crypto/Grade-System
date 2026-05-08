@@ -51,15 +51,18 @@ router.get('/:id', async (req, res) => {
 
 // Create subject
 router.post('/', async (req, res) => {
-  const { subject_name, instructor_name, semester } = req.body;
+  const { subject_name, instructor_name, semester, passing_grade } = req.body;
 
   if (!subject_name || !subject_name.trim())
     return res.status(400).json({ error: 'Subject name is required' });
 
+  const pg = parseFloat(passing_grade);
+  const passingGrade = (!isNaN(pg) && pg >= 0 && pg <= 100) ? pg : 75;
+
   try {
     const result = await run2(
-      'INSERT INTO subjects (user_id, subject_name, instructor_name, semester) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.user.id, subject_name.trim(), instructor_name || '', semester || '']
+      'INSERT INTO subjects (user_id, subject_name, instructor_name, semester, passing_grade) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [req.user.id, subject_name.trim(), instructor_name || '', semester || '', passingGrade]
     );
     const subject = await get2('SELECT * FROM subjects WHERE id = $1', [result.lastInsertRowid]);
     res.status(201).json(subject);
@@ -77,13 +80,16 @@ router.put('/:id', async (req, res) => {
     );
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
 
-    const { subject_name, instructor_name, semester } = req.body;
+    const { subject_name, instructor_name, semester, passing_grade } = req.body;
     if (!subject_name || !subject_name.trim())
       return res.status(400).json({ error: 'Subject name is required' });
 
+    const pg = parseFloat(passing_grade);
+    const passingGrade = (!isNaN(pg) && pg >= 0 && pg <= 100) ? pg : subject.passing_grade ?? 75;
+
     await run2(
-      'UPDATE subjects SET subject_name = $1, instructor_name = $2, semester = $3 WHERE id = $4',
-      [subject_name.trim(), instructor_name || '', semester || '', req.params.id]
+      'UPDATE subjects SET subject_name = $1, instructor_name = $2, semester = $3, passing_grade = $4 WHERE id = $5',
+      [subject_name.trim(), instructor_name || '', semester || '', passingGrade, req.params.id]
     );
     const updated = await get2('SELECT * FROM subjects WHERE id = $1', [req.params.id]);
     res.json(updated);

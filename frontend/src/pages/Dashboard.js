@@ -3,16 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, calculateGrade, getGradeStatus } from '../utils/api';
 import SubjectModal from '../components/SubjectModal';
-import SettingsModal from '../components/SettingsModal';
 
 const TUTORIAL_STEPS = [
-  { icon: '🎓', title: 'Welcome to GradeTrack!', description: 'GradeTrack helps you monitor your academic performance in real time. You can add subjects, set grading categories with weights, log your scores, and instantly see your standing — all in one place.', tip: '💡 This tutorial will walk you through everything. You can revisit it anytime.' },
-  { icon: '📚', title: 'Step 1 — Add Your Subjects', description: 'Start by adding each subject you are enrolled in this semester. Click the "+ Add Subject" button at the top right of the dashboard. Fill in the subject name, your instructor\'s name, and the semester.', tip: '💡 You can add as many subjects as you need. Each subject is tracked independently.' },
-  { icon: '⚖️', title: 'Step 2 — Set Up Grading Categories', description: 'Once inside a subject, add grading categories such as Quizzes, Assignments, Midterm Exam, and Final Exam. Each category has a weight (e.g., Quizzes = 30%, Finals = 40%). Make sure your total weights add up to 100%.', tip: '💡 Categories with higher weights impact your grade more — set them accurately!' },
-  { icon: '📝', title: 'Step 3 — Log Your Scores', description: 'Inside each category, add individual scores. Enter the score you obtained and the total possible score (e.g., 18 out of 20). You can label each score (e.g., "Quiz 1", "Assignment 2") for easy reference.', tip: '💡 The more scores you log, the more accurate your grade calculation becomes.' },
-  { icon: '📊', title: 'Step 4 — Track Your Grade', description: 'GradeTrack automatically calculates your weighted grade based on your scores. Your grade status is shown as On Track (≥85%), Needs Improvement (75–84%), or At Risk (<75%), with color indicators on each subject card.', tip: '💡 Green means you\'re doing great! Yellow is a warning, and Red means you need to focus more.' },
-  { icon: '🎯', title: 'Step 5 — Use the Target Grade Planner', description: 'Inside any subject, you can set a target grade and GradeTrack will calculate the required average score on your remaining assessments to reach that goal. This helps you plan your study sessions effectively.', tip: '💡 Use the planner before exams to know exactly what score you need to pass or excel.' },
-  { icon: '🚀', title: "You're All Set!", description: 'You now know everything you need to use GradeTrack effectively. Start by adding your first subject — your academic journey begins here. Good luck this semester! 🍀', tip: '💡 You can reopen this tutorial anytime by clicking the "?" button on the dashboard.' },
+  { icon: '', title: 'Welcome to GradeTrack!', description: 'GradeTrack helps you monitor your academic performance in real time. You can add subjects, set grading categories with weights, log your scores, and instantly see your standing — all in one place.', tip: ' This tutorial will walk you through everything. You can revisit it anytime.' },
+  { icon: '', title: 'Step 1 — Add Your Subjects', description: 'Start by adding each subject you are enrolled in this semester. Click the "+ Add Subject" button at the top right of the dashboard. Fill in the subject name, your instructor\'s name, and the semester.', tip: ' You can add as many subjects as you need. Each subject is tracked independently.' },
+  { icon: '️', title: 'Step 2 — Set Up Grading Categories', description: 'Once inside a subject, add grading categories such as Quizzes, Assignments, Midterm Exam, and Final Exam. Each category has a weight (e.g., Quizzes = 30%, Finals = 40%). Make sure your total weights add up to 100%.', tip: ' Categories with higher weights impact your grade more — set them accurately!' },
+  { icon: '', title: 'Step 3 — Log Your Scores', description: 'Inside each category, add individual scores. Enter the score you obtained and the total possible score (e.g., 18 out of 20). You can label each score (e.g., "Quiz 1", "Assignment 2") for easy reference.', tip: ' The more scores you log, the more accurate your grade calculation becomes.' },
+  { icon: '', title: 'Step 4 — Track Your Grade', description: 'GradeTrack automatically calculates your weighted grade based on your scores. Your grade status is shown as On Track (≥85%), Needs Improvement (75–84%), or At Risk (<75%), with color indicators on each subject card.', tip: ' Green means you\'re doing great! Yellow is a warning, and Red means you need to focus more.' },
+  { icon: '', title: 'Step 5 — Use the Target Grade Planner', description: 'Inside any subject, you can set a target grade and GradeTrack will calculate the required average score on your remaining assessments to reach that goal. This helps you plan your study sessions effectively.', tip: ' Use the planner before exams to know exactly what score you need to pass or excel.' },
+  { icon: '', title: "You're All Set!", description: 'You now know everything you need to use GradeTrack effectively. Start by adding your first subject — your academic journey begins here. Good luck this semester! ', tip: ' You can reopen this tutorial anytime by clicking the "?" button on the dashboard.' },
 ];
 
 function Toast({ toasts }) {
@@ -27,7 +26,7 @@ function Toast({ toasts }) {
           boxShadow: '0 4px 20px rgba(15,23,42,0.12)', display: 'flex', alignItems: 'center', gap: '8px',
           animation: 'slideIn 0.3s ease', minWidth: '220px',
         }}>
-          <span style={{ fontSize: '16px' }}>{t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : 'ℹ️'}</span>
+          <span style={{ fontSize: '16px' }}>{t.type === 'success' ? '' : t.type === 'error' ? '' : 'ℹ️'}</span>
           {t.message}
         </div>
       ))}
@@ -43,8 +42,6 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [userSettings, setUserSettings] = useState(null);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [search, setSearch] = useState('');
@@ -72,10 +69,6 @@ export default function Dashboard() {
   useEffect(() => { loadSubjects(); }, [loadSubjects]);
 
   useEffect(() => {
-    api.getSettings().then(s => setUserSettings(s)).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     const seen = localStorage.getItem('gradetrack_tutorial_seen');
     if (!seen) { setShowTutorial(true); localStorage.setItem('gradetrack_tutorial_seen', 'true'); }
   }, []);
@@ -91,7 +84,6 @@ export default function Dashboard() {
 
   const stats = (() => {
     const withGrades = subjects.map(s => { const g = calculateGrade(s.categories, s.attendance); return g ? g.grade : null; }).filter(g => g !== null);
-    const thresh = userSettings;
     return { total: subjects.length, avg: withGrades.length ? withGrades.reduce((a, b) => a + b, 0) / withGrades.length : null, onTrack: withGrades.filter(g => g >= 85).length, atRisk: withGrades.filter(g => g < 75).length };
   })();
 
@@ -161,12 +153,7 @@ export default function Dashboard() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
             Semester Summary
           </button>
-          <button onClick={() => setShowSettings(true)} style={{ ...styles.addBtn, background: 'white', color: '#374151', border: '1.5px solid #E2E8F0', boxShadow: '0 1px 4px rgba(15,23,42,0.08)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFF'; e.currentTarget.style.borderColor = '#BFDBFE'; e.currentTarget.style.color = '#2563EB'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.color = '#374151'; }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-            Settings
-          </button>
+
           <button onClick={() => { setEditSubject(null); setShowModal(true); }} style={styles.addBtn} onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'} onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2.5" strokeLinecap="round"/></svg>
               Add Subject
@@ -176,10 +163,10 @@ export default function Dashboard() {
 
         {subjects.length > 0 && (
           <div style={styles.statsGrid} className="animate-in">
-            <StatCard icon="📚" label="Total Subjects" value={stats.total} color="#2563EB" />
-            <StatCard icon="📊" label="Overall Average" value={stats.avg !== null ? `${stats.avg.toFixed(1)}%` : '—'} color={stats.avg !== null ? getGradeStatus(stats.avg).color : '#94A3B8'} />
-            <StatCard icon="✅" label="On Track" value={stats.onTrack} color="#10B981" />
-            <StatCard icon="🚨" label="At Risk" value={stats.atRisk} color="#EF4444" />
+            <StatCard icon="" label="Total Subjects" value={stats.total} color="#2563EB" />
+            <StatCard icon="" label="Overall Average" value={stats.avg !== null ? `${stats.avg.toFixed(1)}%` : '—'} color={stats.avg !== null ? getGradeStatus(stats.avg).color : '#94A3B8'} />
+            <StatCard icon="" label="On Track" value={stats.onTrack} color="#10B981" />
+            <StatCard icon="" label="At Risk" value={stats.atRisk} color="#EF4444" />
           </div>
         )}
 
@@ -188,7 +175,7 @@ export default function Dashboard() {
             <div style={styles.searchWrap}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ color: '#94A3B8', flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               <input type="text" placeholder="Search subjects or instructors..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
-              {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '14px', padding: '0 4px' }}>✕</button>}
+              {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '14px', padding: '0 4px' }}>×</button>}
             </div>
             <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={styles.sortSelect}>
               <option value="default">Sort: Default</option>
@@ -207,14 +194,14 @@ export default function Dashboard() {
           <EmptyState onAdd={() => setShowModal(true)} onTutorial={openTutorial} />
         ) : filteredSubjects.length === 0 ? (
           <div style={styles.noResults}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}></div>
             <div style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A', marginBottom: '6px' }}>No subjects found</div>
             <div style={{ fontSize: '13px', color: '#64748B' }}>Try a different search term</div>
           </div>
         ) : (
           <div style={styles.grid}>
             {filteredSubjects.map((subject, i) => (
-              <SubjectCard key={subject.id} subject={subject} delay={i * 0.06} settings={userSettings} settings={userSettings}
+              <SubjectCard key={subject.id} subject={subject} delay={i * 0.06} settings={userSettings}
                 onClick={() => navigate(`/subject/${subject.id}`)}
                 onEdit={e => { e.stopPropagation(); setEditSubject(subject); setShowModal(true); }}
                 onDelete={e => { e.stopPropagation(); setDeleteConfirm(subject); }} />
@@ -224,13 +211,6 @@ export default function Dashboard() {
       </main>
 
       <Toast toasts={toasts} />
-
-      {showSettings && (
-        <SettingsModal
-          onClose={() => setShowSettings(false)}
-          onSaved={() => api.getSettings().then(s => setUserSettings(s)).catch(() => {})}
-        />
-      )}
 
       {showModal && (
         <SubjectModal subject={editSubject}
@@ -247,7 +227,7 @@ export default function Dashboard() {
       {deleteConfirm && (
         <div style={styles.overlay} onClick={() => setDeleteConfirm(null)}>
           <div style={styles.confirmModal} onClick={e => e.stopPropagation()} className="animate-scale">
-            <div style={{ fontSize: '40px', textAlign: 'center', marginBottom: '16px' }}>🗑️</div>
+            <div style={{ fontSize: '40px', textAlign: 'center', marginBottom: '16px' }}>️</div>
             <h3 style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center', marginBottom: '8px' }}>Delete Subject</h3>
             <p style={{ fontSize: '14px', color: '#64748B', textAlign: 'center', marginBottom: '24px' }}>
               Are you sure you want to delete <strong>"{deleteConfirm.subject_name}"</strong>? This will permanently remove all categories and scores.
@@ -263,7 +243,7 @@ export default function Dashboard() {
       {logoutConfirm && (
         <div style={styles.overlay} onClick={() => setLogoutConfirm(false)}>
           <div style={styles.confirmModal} onClick={e => e.stopPropagation()} className="animate-scale">
-            <div style={{ fontSize: '40px', textAlign: 'center', marginBottom: '16px' }}>👋</div>
+            <div style={{ fontSize: '40px', textAlign: 'center', marginBottom: '16px' }}></div>
             <h3 style={{ fontSize: '18px', fontWeight: '700', textAlign: 'center', marginBottom: '8px', color: '#0F172A' }}>Sign Out</h3>
             <p style={{ fontSize: '14px', color: '#64748B', textAlign: 'center', marginBottom: '24px' }}>Are you sure you want to sign out of GradeTrack?</p>
             <div style={{ display: 'flex', gap: '12px' }}>
@@ -280,7 +260,7 @@ export default function Dashboard() {
             <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${((tutorialStep + 1) / TUTORIAL_STEPS.length) * 100}%` }} /></div>
             <div style={styles.stepIndicator}>
               <span style={styles.stepBadge}>Step {tutorialStep + 1} of {TUTORIAL_STEPS.length}</span>
-              <button onClick={closeTutorial} style={styles.skipBtn}>Skip Tutorial ✕</button>
+              <button onClick={closeTutorial} style={styles.skipBtn}>Skip Tutorial ×</button>
             </div>
             <div style={styles.tutorialContent}>
               <div style={styles.tutorialIconWrap}><span style={styles.tutorialIcon}>{step.icon}</span></div>
@@ -293,7 +273,7 @@ export default function Dashboard() {
             </div>
             <div style={styles.tutorialNav}>
               <button onClick={prevStep} style={{ ...styles.tutorialNavBtn, opacity: tutorialStep === 0 ? 0.3 : 1 }} disabled={tutorialStep === 0}>← Previous</button>
-              <button onClick={nextStep} style={styles.tutorialNextBtn}>{tutorialStep === TUTORIAL_STEPS.length - 1 ? "Let's Go! 🚀" : 'Next →'}</button>
+              <button onClick={nextStep} style={styles.tutorialNextBtn}>{tutorialStep === TUTORIAL_STEPS.length - 1 ? "Let's Go! " : 'Next →'}</button>
             </div>
           </div>
         </div>
@@ -306,21 +286,21 @@ function EmptyState({ onAdd, onTutorial }) {
   return (
     <div style={styles.emptyWrap} className="animate-scale">
       <div style={styles.emptyCard}>
-        <div style={styles.emptyIconWrap}><span style={styles.emptyIconBig}>🎓</span></div>
+        <div style={styles.emptyIconWrap}><span style={styles.emptyIconBig}></span></div>
         <h2 style={styles.emptyTitle}>Welcome to GradeTrack!</h2>
         <p style={styles.emptyText}>Start tracking your academic performance by adding your first subject. Monitor your grades, set targets, and stay on top of your studies.</p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={onAdd} style={styles.emptyBtnPrimary} onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'} onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>➕ Add Your First Subject</button>
-          <button onClick={onTutorial} style={styles.emptyBtnSecondary} onMouseEnter={e => e.currentTarget.style.background = '#EFF4FF'} onMouseLeave={e => e.currentTarget.style.background = 'white'}>📖 View Tutorial</button>
+          <button onClick={onAdd} style={styles.emptyBtnPrimary} onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'} onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>+ Add Your First Subject</button>
+          <button onClick={onTutorial} style={styles.emptyBtnSecondary} onMouseEnter={e => e.currentTarget.style.background = '#EFF4FF'} onMouseLeave={e => e.currentTarget.style.background = 'white'}> View Tutorial</button>
         </div>
       </div>
       <div style={styles.tipsGrid}>
-        <TipCard icon="📚" title="Add Subjects" desc="Add each subject you're enrolled in this semester with instructor and semester info." />
-        <TipCard icon="⚖️" title="Set Categories" desc="Create grading categories like Quizzes, Assignments, Midterm, and Finals with their weights." />
-        <TipCard icon="📝" title="Log Your Scores" desc="Enter your scores for each activity. GradeTrack automatically computes your grade." />
-        <TipCard icon="🎯" title="Target Grade Planner" desc="Set a target grade and see exactly what score you need on remaining assessments to reach it." />
-        <TipCard icon="📊" title="Track Progress" desc="View your overall average, at-risk subjects, and subjects that are on track — all at a glance." />
-        <TipCard icon="🚨" title="Risk Indicators" desc="Green = On Track (≥85%), Yellow = Needs Improvement (75–84%), Red = At Risk (<75%)." />
+        <TipCard icon="" title="Add Subjects" desc="Add each subject you're enrolled in this semester with instructor and semester info." />
+        <TipCard icon="️" title="Set Categories" desc="Create grading categories like Quizzes, Assignments, Midterm, and Finals with their weights." />
+        <TipCard icon="" title="Log Your Scores" desc="Enter your scores for each activity. GradeTrack automatically computes your grade." />
+        <TipCard icon="" title="Target Grade Planner" desc="Set a target grade and see exactly what score you need on remaining assessments to reach it." />
+        <TipCard icon="" title="Track Progress" desc="View your overall average, at-risk subjects, and subjects that are on track — all at a glance." />
+        <TipCard icon="" title="Risk Indicators" desc="Green = On Track (≥85%), Yellow = Needs Improvement (75–84%), Red = At Risk (<75%)." />
       </div>
     </div>
   );
@@ -346,9 +326,9 @@ function StatCard({ icon, label, value, color }) {
   );
 }
 
-function SubjectCard({ subject, delay, onClick, onEdit, onDelete, settings }) {
+function SubjectCard({ subject, delay, onClick, onEdit, onDelete }) {
   const gradeData = calculateGrade(subject.categories, subject.attendance);
-  const status = gradeData ? getGradeStatus(gradeData.grade, settings) : null;
+  const status = gradeData ? getGradeStatus(gradeData.grade, subject.passing_grade ?? 75) : null;
   const totalWeight = (subject.categories || []).reduce((s, c) => s + c.category_weight, 0);
   return (
     <div onClick={onClick} style={{ ...styles.subjectCard, animationDelay: `${delay}s` }} className="animate-in"
@@ -357,18 +337,18 @@ function SubjectCard({ subject, delay, onClick, onEdit, onDelete, settings }) {
       <div style={styles.cardHeader}>
         <div style={styles.subjectInitial}>{subject.subject_name[0]}</div>
         <div style={styles.cardActions}>
-          <ActionBtn onClick={onEdit} icon="✏️" title="Edit" />
-          <ActionBtn onClick={onDelete} icon="🗑️" title="Delete" danger />
+          <ActionBtn onClick={onEdit} Icon={Icons.Edit} title="Edit" />
+          <ActionBtn onClick={onDelete} Icon={Icons.Trash} title="Delete" danger />
         </div>
       </div>
       <h3 style={styles.subjectName}>{subject.subject_name}</h3>
-      {subject.instructor_name && <p style={styles.subjectMeta}>👤 {subject.instructor_name}</p>}
-      {subject.semester && <p style={styles.subjectMeta}>📅 {subject.semester}</p>}
+      {subject.instructor_name && <p style={styles.subjectMeta}> {subject.instructor_name}</p>}
+      {subject.semester && <p style={styles.subjectMeta}> {subject.semester}</p>}
       <div style={styles.cardDivider} />
       {gradeData ? (
         <>
           <div style={styles.gradeRow}><span style={styles.gradeLabel}>Current Grade</span><span style={{ ...styles.gradeBadge, background: status.bg, color: status.color }}>{gradeData.grade.toFixed(2)}%</span></div>
-          <div style={{ ...styles.statusBadge, background: status.bg, color: status.color }}>{status.emoji} {status.label}</div>
+          <div style={{ ...styles.statusBadge, background: status.bg, color: status.color }}>{{status.label}</div>
           <ProgressBar value={gradeData.grade} color={status.color} />
         </>
       ) : <div style={styles.noGrade}>No scores yet — add categories &amp; scores</div>}
@@ -380,12 +360,13 @@ function SubjectCard({ subject, delay, onClick, onEdit, onDelete, settings }) {
   );
 }
 
-function ActionBtn({ onClick, icon, title, danger }) {
+function ActionBtn({ onClick, Icon, title, danger }) {
   return (
-    <button onClick={onClick} title={title} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '14px', transition: 'background 0.15s' }}
-      onMouseEnter={e => e.currentTarget.style.background = danger ? '#FEE2E2' : '#F1F5F9'}
-      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-      {icon}
+    <button onClick={onClick} title={title}
+      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '7px', borderRadius: '7px', color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? '#FEE2E2' : '#F1F5F9'; e.currentTarget.style.color = danger ? '#EF4444' : '#374151'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94A3B8'; }}>
+      <Icon />
     </button>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, calculateGrade, getGradeStatus, gradeToGPA } from '../utils/api';
+import { api, calculateGrade, getGradeStatus } from '../utils/api';
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
 const Icons = {
@@ -14,11 +14,7 @@ const Icons = {
       <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
     </svg>
   ),
-  Award: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
-    </svg>
-  ),
+
   BookOpen: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
@@ -59,42 +55,12 @@ const Icons = {
   ),
 };
 
-// GPA scale description
-const gpaScale = [
-  { range: '97–100%', gpa: '4.0', label: 'A+' },
-  { range: '93–96%',  gpa: '4.0', label: 'A'  },
-  { range: '90–92%',  gpa: '3.7', label: 'A−' },
-  { range: '87–89%',  gpa: '3.3', label: 'B+' },
-  { range: '83–86%',  gpa: '3.0', label: 'B'  },
-  { range: '80–82%',  gpa: '2.7', label: 'B−' },
-  { range: '77–79%',  gpa: '2.3', label: 'C+' },
-  { range: '73–76%',  gpa: '2.0', label: 'C'  },
-  { range: '70–72%',  gpa: '1.7', label: 'C−' },
-  { range: '67–69%',  gpa: '1.3', label: 'D+' },
-  { range: '65–66%',  gpa: '1.0', label: 'D'  },
-  { range: 'Below 65%', gpa: '0.0', label: 'F' },
-];
 
-function getLetterGrade(grade) {
-  if (grade >= 97) return 'A+';
-  if (grade >= 93) return 'A';
-  if (grade >= 90) return 'A−';
-  if (grade >= 87) return 'B+';
-  if (grade >= 83) return 'B';
-  if (grade >= 80) return 'B−';
-  if (grade >= 77) return 'C+';
-  if (grade >= 73) return 'C';
-  if (grade >= 70) return 'C−';
-  if (grade >= 67) return 'D+';
-  if (grade >= 65) return 'D';
-  return 'F';
-}
 
 export default function SemesterSummary() {
   const navigate = useNavigate();
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showGPAScale, setShowGPAScale] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -118,45 +84,40 @@ export default function SemesterSummary() {
     const gd = calculateGrade(s.categories, s.attendance);
     const grade = gd?.grade ?? null;
     const status = grade !== null ? getGradeStatus(grade, s.passing_grade ?? 75) : null;
-    const gpa = grade !== null ? gradeToGPA(grade) : null;
-    const letter = grade !== null ? getLetterGrade(grade) : null;
-    return { ...s, grade, status, gpa, letter };
+    return { ...s, grade, status };
   });
 
   const withGrades = subjectGrades.filter(s => s.grade !== null);
   const overallAvg = withGrades.length
     ? withGrades.reduce((a, s) => a + s.grade, 0) / withGrades.length
     : null;
-  const overallGPA = withGrades.length
-    ? withGrades.reduce((a, s) => a + s.gpa, 0) / withGrades.length
-    : null;
+
   const bestSubject = withGrades.length
     ? withGrades.reduce((best, s) => s.grade > best.grade ? s : best, withGrades[0])
     : null;
   const atRiskCount = withGrades.filter(s => s.status?.label === 'At Risk').length;
   const onTrackCount = withGrades.filter(s => s.status?.label === 'On Track').length;
   const overallStatus = overallAvg !== null ? getGradeStatus(overallAvg) : null;
+  const overallGPA = null; // removed
 
   const handleExportSummary = () => {
     const rows = [
       ['GradeTrack — Semester Summary'],
       ['Generated:', new Date().toLocaleString()],
       [],
-      ['Subject', 'Instructor', 'Semester', 'Grade (%)', 'Letter', 'GPA', 'Status', 'Categories'],
+      ['Subject', 'Instructor', 'Semester', 'Grade (%)', 'Status', 'Categories'],
       ...subjectGrades.map(s => [
         s.subject_name,
         s.instructor_name || '—',
         s.semester || '—',
         s.grade !== null ? s.grade.toFixed(2) : '—',
-        s.letter || '—',
-        s.gpa !== null ? s.gpa.toFixed(2) : '—',
         s.status?.label || 'No scores',
         s.categories?.length || 0,
       ]),
       [],
       ['SUMMARY'],
       ['Overall Average', overallAvg !== null ? overallAvg.toFixed(2) + '%' : '—'],
-      ['Overall GPA', overallGPA !== null ? overallGPA.toFixed(2) : '—'],
+
       ['On Track Subjects', onTrackCount],
       ['At Risk Subjects', atRiskCount],
     ];
@@ -190,12 +151,7 @@ export default function SemesterSummary() {
           Back to Dashboard
         </button>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button onClick={() => setShowGPAScale(!showGPAScale)} style={s.outlineBtn}
-            onMouseEnter={e => e.currentTarget.style.background = '#EFF4FF'}
-            onMouseLeave={e => e.currentTarget.style.background = 'white'}>
-            <Icons.Award />
-            {showGPAScale ? 'Hide' : 'View'} GPA Scale
-          </button>
+
           <button onClick={handleExportSummary} style={s.primaryBtn}
             onMouseEnter={e => { e.currentTarget.style.background = '#059669'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = '#10B981'; e.currentTarget.style.transform = 'translateY(0)'; }}>
@@ -226,15 +182,7 @@ export default function SemesterSummary() {
                 bg={overallStatus?.bg ?? '#F8FAFC'}
                 Icon={Icons.BarChart}
               />
-              <SummaryStatCard
-                label="Overall GPA"
-                value={overallGPA !== null ? overallGPA.toFixed(2) : '—'}
-                sub={overallGPA !== null ? getLetterGrade(overallAvg) : '—'}
-                color="#6366F1"
-                bg="#F5F3FF"
-                Icon={Icons.Award}
-                mono
-              />
+
               <SummaryStatCard
                 label="Subjects"
                 value={subjects.length}
@@ -253,25 +201,6 @@ export default function SemesterSummary() {
               />
             </div>
 
-            {/* GPA Scale Tooltip */}
-            {showGPAScale && (
-              <div style={s.gpaScaleCard} className="fade-in">
-                <h3 style={{ fontSize: '13px', fontWeight: '700', color: '#0F172A', marginBottom: '12px', letterSpacing: '-0.2px' }}>GPA Conversion Scale</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '6px' }}>
-                  {gpaScale.map(row => (
-                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#F8FAFC', borderRadius: '7px', fontSize: '12px' }}>
-                      <span style={{ color: '#64748B' }}>{row.range}</span>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span style={{ fontWeight: '800', color: '#0F172A', fontFamily: 'DM Mono, monospace' }}>{row.label}</span>
-                        <span style={{ fontWeight: '600', color: '#6366F1', fontFamily: 'DM Mono, monospace' }}>{row.gpa}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '10px' }}>Based on standard 4.0 GPA scale. Actual GPA may differ per institution.</p>
-              </div>
-            )}
-
             {/* Subject Table */}
             <div style={s.tableCard} className="fade-in">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -289,7 +218,7 @@ export default function SemesterSummary() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr style={{ background: '#F8FAFC' }}>
-                        {['Subject', 'Instructor', 'Semester', 'Grade', 'Letter', 'GPA', 'Categories', 'Status'].map(h => (
+                        {['Subject', 'Instructor', 'Semester', 'Grade', 'Categories', 'Status'].map(h => (
                           <th key={h} style={s.th}>{h}</th>
                         ))}
                       </tr>
@@ -322,16 +251,7 @@ export default function SemesterSummary() {
                               </span>
                             ) : <span style={{ color: '#CBD5E1', fontSize: '12px' }}>No scores</span>}
                           </td>
-                          <td style={s.td}>
-                            {sub.letter ? (
-                              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '800', fontSize: '14px', color: sub.status.color }}>{sub.letter}</span>
-                            ) : <span style={{ color: '#CBD5E1' }}>—</span>}
-                          </td>
-                          <td style={s.td}>
-                            {sub.gpa !== null ? (
-                              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '700', color: '#6366F1', fontSize: '13px' }}>{sub.gpa.toFixed(2)}</span>
-                            ) : <span style={{ color: '#CBD5E1' }}>—</span>}
-                          </td>
+
                           <td style={s.td}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#64748B', background: '#F1F5F9', padding: '3px 8px', borderRadius: '20px', fontWeight: '600' }}>
                               <Icons.Layers />
@@ -360,16 +280,6 @@ export default function SemesterSummary() {
                               {overallAvg?.toFixed(2)}%
                             </span>
                           </td>
-                          <td style={s.td}>
-                            <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '800', color: overallStatus?.color, fontSize: '14px' }}>
-                              {getLetterGrade(overallAvg)}
-                            </span>
-                          </td>
-                          <td style={s.td}>
-                            <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '800', color: '#6366F1', fontSize: '14px' }}>
-                              {overallGPA?.toFixed(2)}
-                            </span>
-                          </td>
                           <td colSpan={2} style={s.td} />
                         </tr>
                       </tfoot>
@@ -383,13 +293,13 @@ export default function SemesterSummary() {
             {bestSubject && (
               <div style={s.highlightCard} className="fade-in">
                 <div style={s.highlightIcon}>
-                  <Icons.Award />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
                 </div>
                 <div>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: '#92400E', letterSpacing: '0.5px', marginBottom: '2px' }}>TOP PERFORMING SUBJECT</div>
                   <div style={{ fontSize: '15px', fontWeight: '800', color: '#78350F', letterSpacing: '-0.3px' }}>{bestSubject.subject_name}</div>
                   <div style={{ fontSize: '12px', color: '#92400E', marginTop: '2px' }}>
-                    {bestSubject.grade.toFixed(2)}% &nbsp;·&nbsp; {bestSubject.letter} &nbsp;·&nbsp; {bestSubject.gpa.toFixed(2)} GPA
+                    {bestSubject.grade.toFixed(2)}%
                   </div>
                 </div>
               </div>

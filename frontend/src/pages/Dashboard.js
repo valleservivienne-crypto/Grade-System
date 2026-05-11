@@ -352,7 +352,7 @@ function TipCard({ SvgIcon, title, desc }) {
 function StatCard({ SvgIcon, label, value, color }) {
   return (
     <div style={styles.statCard}>
-      <div style={{ fontSize: '24px', marginBottom: '8px' }}>{icon}</div>
+      <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'#EFF4FF', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'10px', color }}>{SvgIcon && <SvgIcon />}</div>
       <div style={{ fontSize: '26px', fontWeight: '800', color, letterSpacing: '-1px' }}>{value}</div>
       <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500', marginTop: '2px' }}>{label}</div>
     </div>

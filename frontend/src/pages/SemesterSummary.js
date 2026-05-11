@@ -165,7 +165,8 @@ export default function SemesterSummary() {
         {/* Header */}
         <div style={{ marginBottom: '28px' }}>
           <h1 style={s.pageTitle}>Semester Summary</h1>
-          <p style={s.pageSub}>Your academic performance overview with GPA equivalents</p>
+          <p style={s.pageSub}>Overview of your grades and standing across all subjects this semester</p>
+
         </div>
 
         {loading ? (

@@ -107,7 +107,17 @@ export default function Dashboard() {
 
   const stats = (() => {
     const withGrades = subjects.map(s => { const g = calculateGrade(s.categories, s.attendance); return g ? g.grade : null; }).filter(g => g !== null);
-    return { total: subjects.length, avg: withGrades.length ? withGrades.reduce((a, b) => a + b, 0) / withGrades.length : null, onTrack: withGrades.filter(g => g >= 85).length, atRisk: withGrades.filter(g => g < 75).length };
+    const onTrackCount = subjects.filter(s => {
+      const g = calculateGrade(s.categories, s.attendance);
+      const pg = s.passing_grade ?? 75;
+      return g && g.grade >= pg + 10;
+    }).length;
+    const atRiskCount = subjects.filter(s => {
+      const g = calculateGrade(s.categories, s.attendance);
+      const pg = s.passing_grade ?? 75;
+      return g && g.grade < pg;
+    }).length;
+    return { total: subjects.length, avg: withGrades.length ? withGrades.reduce((a, b) => a + b, 0) / withGrades.length : null, onTrack: onTrackCount, atRisk: atRiskCount };
   })();
 
   const filteredSubjects = subjects
@@ -186,10 +196,10 @@ export default function Dashboard() {
 
         {subjects.length > 0 && (
           <div style={styles.statsGrid} className="animate-in">
-            <StatCard icon="" label="Total Subjects" value={stats.total} color="#2563EB" />
-            <StatCard icon="" label="Overall Average" value={stats.avg !== null ? `${stats.avg.toFixed(1)}%` : '—'} color={stats.avg !== null ? getGradeStatus(stats.avg).color : '#94A3B8'} />
-            <StatCard icon="" label="On Track" value={stats.onTrack} color="#10B981" />
-            <StatCard icon="" label="At Risk" value={stats.atRisk} color="#EF4444" />
+            <StatCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>} label="Total Subjects" value={stats.total} color="#2563EB" />
+            <StatCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>} label="Overall Average" value={stats.avg !== null ? `${stats.avg.toFixed(1)}%` : '—'} color={stats.avg !== null ? getGradeStatus(stats.avg).color : '#94A3B8'} />
+            <StatCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} label="On Track" value={stats.onTrack} color="#10B981" />
+            <StatCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>} label="At Risk" value={stats.atRisk} color="#EF4444" />
           </div>
         )}
 
@@ -286,7 +296,7 @@ export default function Dashboard() {
               <button onClick={closeTutorial} style={styles.skipBtn}>Skip Tutorial ×</button>
             </div>
             <div style={styles.tutorialContent}>
-              <div style={styles.tutorialIconWrap}><span style={styles.tutorialIcon}>{step.icon}</span></div>
+              <div style={styles.tutorialIconWrap}><TutorialIcon index={tutorialStep} /></div>
               <h2 style={styles.tutorialTitle}>{step.title}</h2>
               <p style={styles.tutorialDesc}>{step.description}</p>
               <div style={styles.tutorialTip}>{step.tip}</div>
@@ -318,28 +328,28 @@ function EmptyState({ onAdd, onTutorial }) {
         </div>
       </div>
       <div style={styles.tipsGrid}>
-        <TipCard icon="" title="Add Subjects" desc="Add each subject you're enrolled in this semester with instructor and semester info." />
-        <TipCard icon="️" title="Set Categories" desc="Create grading categories like Quizzes, Assignments, Midterm, and Finals with their weights." />
-        <TipCard icon="" title="Log Your Scores" desc="Enter your scores for each activity. GradeTrack automatically computes your grade." />
-        <TipCard icon="" title="Target Grade Planner" desc="Set a target grade and see exactly what score you need on remaining assessments to reach it." />
-        <TipCard icon="" title="Track Progress" desc="View your overall average, at-risk subjects, and subjects that are on track — all at a glance." />
-        <TipCard icon="" title="Risk Indicators" desc="Green = On Track (≥85%), Yellow = Needs Improvement (75–84%), Red = At Risk (<75%)." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>} title="Add Subjects" desc="Add each subject you're enrolled in this semester with instructor and semester info." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M3 6l9 6 9-6"/><path d="M3 18l9-6 9 6"/></svg>} title="Set Categories" desc="Create grading categories like Quizzes, Assignments, Midterm, and Finals with their weights." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg>} title="Log Your Scores" desc="Enter your scores for each activity. GradeTrack automatically computes your grade." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>} title="Target Grade Planner" desc="Set a target grade and see exactly what score you need on remaining assessments to reach it." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>} title="Track Progress" desc="View your overall average, at-risk subjects, and subjects that are on track — all at a glance." />
+        <TipCard SvgIcon={() => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>} title="Risk Indicators" desc="Green = On Track (≥85%), Yellow = Needs Improvement (75–84%), Red = At Risk (<75%)." />
       </div>
     </div>
   );
 }
 
-function TipCard({ icon, title, desc }) {
+function TipCard({ SvgIcon, title, desc }) {
   return (
     <div style={styles.tipCard} onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(37,99,235,0.12)'; e.currentTarget.style.borderColor = '#BFDBFE'; }} onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(15,23,42,0.06)'; e.currentTarget.style.borderColor = '#E2E8F0'; }}>
-      <div style={styles.tipIcon}>{icon}</div>
+      <div style={styles.tipIcon}>{SvgIcon && <SvgIcon />}</div>
       <div style={styles.tipTitle}>{title}</div>
       <div style={styles.tipDesc}>{desc}</div>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, color }) {
+function StatCard({ SvgIcon, label, value, color }) {
   return (
     <div style={styles.statCard}>
       <div style={{ fontSize: '24px', marginBottom: '8px' }}>{icon}</div>
@@ -400,6 +410,28 @@ function ProgressBar({ value, color }) {
       <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: '4px', transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)' }} />
     </div>
   );
+}
+
+
+// ─── Tutorial Icon ────────────────────────────────────────────────────────────
+function TutorialIcon({ index }) {
+  const icons = [
+    // Welcome
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
+    // Add Subjects
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+    // Set Categories
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M3 6l9 6 9-6"/><path d="M3 18l9-6 9 6"/></svg>,
+    // Log Scores
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg>,
+    // Track Grade
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>,
+    // Target Grade Planner
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+    // All Set
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  ];
+  return <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icons[index] || icons[0]}</span>;
 }
 
 const styles = {

@@ -66,30 +66,6 @@ const initDB = async () => {
     // Feature 3: date_taken field on scores
     await client.query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS date_taken DATE`);
 
-    // Feature 1: grade snapshots for history chart
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS grade_snapshots (
-        id SERIAL PRIMARY KEY,
-        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-        grade REAL NOT NULL,
-        label TEXT,
-        snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Feature 5: user settings (grade thresholds)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS user_settings (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-        on_track_threshold REAL NOT NULL DEFAULT 85,
-        needs_improvement_threshold REAL NOT NULL DEFAULT 75,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
     await client.query(`
       CREATE TABLE IF NOT EXISTS attendance_sessions (
         id SERIAL PRIMARY KEY,

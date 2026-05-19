@@ -15,6 +15,7 @@ export default function SubjectDetail() {
   const [showScoreModal, setShowScoreModal] = useState(null);
   const [editScore, setEditScore] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [showAI, setShowAI] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [attendance, setAttendance] = useState(null);
   const [editingTotal, setEditingTotal] = useState(false);
@@ -204,6 +205,14 @@ export default function SubjectDetail() {
         </button>
         <div style={styles.navRight}>
           <span style={styles.navSemester}>{subject.semester || 'No semester'}</span>
+          <button onClick={() => setShowAI(true)} style={{ ...styles.printBtn, background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', boxShadow: '0 2px 8px rgba(99,102,241,0.35)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #4F46E5, #7C3AED)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #6366F1, #8B5CF6)'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            AI Assistant
+          </button>
           <button onClick={handlePrint} style={styles.printBtn}
             onMouseEnter={e => e.currentTarget.style.background = '#1D4ED8'}
             onMouseLeave={e => e.currentTarget.style.background = '#2563EB'}>
@@ -804,6 +813,16 @@ function WeightBar({ categories, attendanceWeight }) {
         )}
         {total < 100 && <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>({(100 - total).toFixed(0)}% unassigned)</span>}
       </div>
+    {/* AI Assistant Modal */}
+    {showAI && (
+      <AIAssistant
+        subject={subject}
+        gradeData={gradeData}
+        attendance={attendance}
+        passingGrade={subject?.passing_grade ?? 75}
+        onClose={() => setShowAI(false)}
+      />
+    )}
     </div>
   );
 }
@@ -1031,6 +1050,364 @@ function ErrorState({ message, onBack }) {
 }
 
 
+
+
+// ─── AI Assistant ─────────────────────────────────────────────────────────────
+const GEMINI_API_KEY = "AIzaSyDOExe1_NeXqV6-xXyl2eZgoJyDwxedVZk";
+
+function AIAssistant({ subject, gradeData, attendance, passingGrade, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [file, setFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+  const messagesEndRef = React.useRef(null);
+  const fileInputRef = React.useRef(null);
+
+  // Build subject context for AI
+  const buildContext = () => {
+    const cats = (subject.categories || []).map(cat => {
+      const scores = cat.scores || [];
+      const avg = scores.length
+        ? scores.reduce((a, s) => a + (s.score_obtained / s.total_score) * 100, 0) / scores.length
+        : null;
+      return `${cat.category_name} (weight: ${cat.category_weight}%, avg: ${avg !== null ? avg.toFixed(1) + '%' : 'no scores yet'})`;
+    }).join('; ');
+
+    const attInfo = attendance && attendance.mode !== 'unset'
+      ? `Attendance: ${attendance.mode === 'with_grade' ? 'included in grade' : 'tracking only'}, ${attendance.attendance_weight}% weight, attendance rate: ${(() => {
+          const s = attendance.sessions || [];
+          const present = s.filter(x => x.status === 'present').length;
+          const late = s.filter(x => x.status === 'late').length;
+          return s.length ? (((present + late * 0.5) / s.length) * 100).toFixed(1) + '%' : 'no sessions yet';
+        })()}`
+      : 'Attendance: not configured';
+
+    const grade = gradeData ? gradeData.grade.toFixed(2) + '%' : 'no grades yet';
+    const status = gradeData
+      ? (gradeData.grade >= passingGrade + 10 ? 'On Track' : gradeData.grade >= passingGrade ? 'Needs Improvement' : 'At Risk')
+      : 'no status';
+
+    return `You are an AI Study Assistant integrated into GradeTrack, an academic grade tracking web app. You have full context about the student's subject.
+
+SUBJECT CONTEXT:
+- Subject: ${subject.subject_name}
+- Instructor: ${subject.instructor_name || 'not specified'}
+- Semester: ${subject.semester || 'not specified'}
+- Passing Grade: ${passingGrade}%
+- Current Grade: ${grade}
+- Status: ${status}
+- Categories: ${cats || 'none added yet'}
+- ${attInfo}
+
+You can help the student with:
+1. Grade calculations and what they need to pass or improve
+2. Explaining concepts related to their subject
+3. Study tips and strategies
+4. Answering questions about uploaded notes or files
+5. General questions about anything
+
+Be friendly, helpful, and respond in the same language the student uses (Filipino or English). Keep responses concise but complete.`;
+  };
+
+  React.useEffect(() => {
+    // Welcome message
+    setMessages([{
+      role: 'assistant',
+      text: `Hello! I\'m your AI Study Assistant for **${subject.subject_name}**. I know your current grade (${gradeData ? gradeData.grade.toFixed(2) + '%' : 'no scores yet'}), categories, and attendance. Ask me anything — grades, study tips, or upload your notes for help!`,
+    }]);
+  }, []);
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const handleFileChange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    if (f.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = ev => setFilePreview({ type: 'image', url: ev.target.result, name: f.name });
+      reader.readAsDataURL(f);
+    } else {
+      setFilePreview({ type: 'file', name: f.name });
+    }
+  };
+
+  const removeFile = () => { setFile(null); setFilePreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
+
+  const sendMessage = async () => {
+    if (!input.trim() && !file) return;
+    const userText = input.trim();
+    setInput('');
+    setLoading(true);
+
+    const newMsg = { role: 'user', text: userText, file: filePreview };
+    setMessages(prev => [...prev, newMsg]);
+
+    try {
+      const parts = [];
+
+      // Add file if present
+      if (file) {
+        const toBase64 = f => new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(f);
+        });
+        const b64 = await toBase64(file);
+        parts.push({ inline_data: { mime_type: file.type, data: b64 } });
+      }
+
+      if (userText) parts.push({ text: userText });
+
+      // Build conversation history
+      const history = messages.slice(1).map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.text }]
+      }));
+
+      const body = {
+        system_instruction: { parts: [{ text: buildContext() }] },
+        contents: [
+          ...history,
+          { role: 'user', parts }
+        ],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+      };
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
+
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error.message);
+
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+      setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
+      removeFile();
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', text: `Error: ${err.message}. Please try again.` }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatText = (text) => {
+    // Simple markdown-like formatting
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br/>');
+  };
+
+  const suggestedQuestions = [
+    'What grade do I need to pass?',
+    'How can I improve my grade?',
+    'Give me study tips for this subject',
+    'Calculate my needed score on the next exam',
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(15,23,42,0.65)',
+      backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 2000, padding: '20px',
+    }}>
+      <div style={{
+        background: 'white', borderRadius: '20px',
+        width: '100%', maxWidth: '680px', height: '85vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 32px 80px rgba(15,23,42,0.25)',
+        overflow: 'hidden', fontFamily: 'Plus Jakarta Sans, sans-serif',
+      }}>
+
+        {/* Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+          padding: '18px 22px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '10px',
+              background: 'rgba(255,255,255,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '800', color: 'white', letterSpacing: '-0.2px' }}>AI Study Assistant</div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)' }}>{subject.subject_name} · Powered by Gemini</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px',
+            width: '32px', height: '32px', cursor: 'pointer', color: 'white',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', background: '#F8FAFF' }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{
+              display: 'flex',
+              justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              gap: '10px', alignItems: 'flex-end',
+            }}>
+              {msg.role === 'assistant' && (
+                <div style={{
+                  width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
+                  background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </div>
+              )}
+              <div style={{
+                maxWidth: '75%',
+                background: msg.role === 'user' ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'white',
+                color: msg.role === 'user' ? 'white' : '#1F2937',
+                padding: '12px 16px', borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                fontSize: '13.5px', lineHeight: '1.6',
+                boxShadow: '0 2px 8px rgba(15,23,42,0.08)',
+              }}>
+                {msg.file && (
+                  <div style={{ marginBottom: '8px' }}>
+                    {msg.file.type === 'image' ? (
+                      <img src={msg.file.url} alt="upload" style={{ maxWidth: '200px', borderRadius: '8px' }} />
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', opacity: 0.85 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        {msg.file.name}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <span dangerouslySetInnerHTML={{ __html: formatText(msg.text) }} />
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div style={{ background: 'white', padding: '14px 18px', borderRadius: '18px 18px 18px 4px', boxShadow: '0 2px 8px rgba(15,23,42,0.08)', display: 'flex', gap: '5px', alignItems: 'center' }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{
+                    width: '7px', height: '7px', borderRadius: '50%',
+                    background: '#6366F1', opacity: 0.7,
+                    animation: 'bounce 1.2s infinite',
+                    animationDelay: `${i * 0.2}s`,
+                  }} />
+                ))}
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Suggested questions — only show if no user messages yet */}
+        {messages.length === 1 && (
+          <div style={{ padding: '0 20px 12px', display: 'flex', gap: '6px', flexWrap: 'wrap', background: '#F8FAFF' }}>
+            {suggestedQuestions.map(q => (
+              <button key={q} onClick={() => { setInput(q); }}
+                style={{
+                  background: 'white', border: '1.5px solid #E0E7FF', borderRadius: '20px',
+                  padding: '5px 12px', fontSize: '11.5px', fontWeight: '500', color: '#6366F1',
+                  cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#EEF2FF'; e.currentTarget.style.borderColor = '#6366F1'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#E0E7FF'; }}>
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* File preview */}
+        {filePreview && (
+          <div style={{ padding: '8px 20px 0', background: 'white', borderTop: '1px solid #F1F5F9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#EEF2FF', borderRadius: '8px', padding: '6px 10px' }}>
+              {filePreview.type === 'image'
+                ? <img src={filePreview.url} alt="" style={{ height: '32px', borderRadius: '4px' }} />
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              }
+              <span style={{ fontSize: '12px', color: '#4F46E5', fontWeight: '500', flex: 1 }}> {filePreview.name}</span>
+              <button onClick={removeFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', display: 'flex' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Input area */}
+        <div style={{ padding: '14px 20px', background: 'white', borderTop: '1px solid #F1F5F9', display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFileChange} />
+          <button onClick={() => fileInputRef.current?.click()}
+            style={{ background: '#F1F5F9', border: 'none', borderRadius: '10px', width: '38px', height: '38px', cursor: 'pointer', color: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#EEF2FF'}
+            onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            placeholder="Ask anything... (Enter to send, Shift+Enter for new line)"
+            rows={1}
+            style={{
+              flex: 1, border: '1.5px solid #E2E8F0', borderRadius: '12px',
+              padding: '10px 14px', fontSize: '13.5px', outline: 'none',
+              resize: 'none', fontFamily: 'Plus Jakarta Sans, sans-serif',
+              maxHeight: '100px', overflowY: 'auto', lineHeight: '1.5',
+              transition: 'border-color 0.2s',
+            }}
+            onFocus={e => e.target.style.borderColor = '#6366F1'}
+            onBlur={e => e.target.style.borderColor = '#E2E8F0'}
+          />
+          <button onClick={sendMessage} disabled={loading || (!input.trim() && !file)}
+            style={{
+              background: loading || (!input.trim() && !file) ? '#E2E8F0' : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+              border: 'none', borderRadius: '10px', width: '38px', height: '38px',
+              cursor: loading || (!input.trim() && !file) ? 'not-allowed' : 'pointer',
+              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, transition: 'all 0.15s',
+            }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+
+        <style>{`
+          @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-6px); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
 
 const styles = {
   page: { minHeight: '100vh', background: '#F0F4FF' },

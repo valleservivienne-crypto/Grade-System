@@ -160,6 +160,7 @@ export default function SubjectDetail() {
   if (error) return <ErrorState message={error} onBack={() => navigate('/dashboard')} />;
 
   return (
+    <>
     <div style={styles.page}>
       <style>{`
         @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
@@ -767,7 +768,6 @@ No — Just Track My Attendance
       )}
     </div>
 
-    {/* AI Assistant Modal */}
     {showAI && (
       <AIAssistant
         subject={subject}
@@ -777,6 +777,7 @@ No — Just Track My Attendance
         onClose={() => setShowAI(false)}
       />
     )}
+  </>
   );
 }
 

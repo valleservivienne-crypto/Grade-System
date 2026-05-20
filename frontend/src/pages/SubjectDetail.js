@@ -766,6 +766,17 @@ No — Just Track My Attendance
         </div>
       )}
     </div>
+
+    {/* AI Assistant Modal */}
+    {showAI && (
+      <AIAssistant
+        subject={subject}
+        gradeData={gradeData}
+        attendance={attendance}
+        passingGrade={subject?.passing_grade ?? 75}
+        onClose={() => setShowAI(false)}
+      />
+    )}
   );
 }
 
@@ -813,16 +824,6 @@ function WeightBar({ categories, attendanceWeight }) {
         )}
         {total < 100 && <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>({(100 - total).toFixed(0)}% unassigned)</span>}
       </div>
-    {/* AI Assistant Modal */}
-    {showAI && (
-      <AIAssistant
-        subject={subject}
-        gradeData={gradeData}
-        attendance={attendance}
-        passingGrade={subject?.passing_grade ?? 75}
-        onClose={() => setShowAI(false)}
-      />
-    )}
     </div>
   );
 }
